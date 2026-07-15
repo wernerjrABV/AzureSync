@@ -2,9 +2,24 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Commands
+## Monorepo layout
+
+This is an enterprise monorepo. See `docs/architecture/monorepo-architecture.md`
+for the full picture. Today it contains one app:
+
+- `apps/sync-service/` — the only service authorized to write to the
+  database. See `apps/sync-service/README.md` and its own `CLAUDE.md`-style
+  guidance below.
+
+Planned next (not yet scaffolded — see `docs/architecture/monorepo-architecture.md`):
+- `apps/api-read/` — read-only backend
+- `apps/web-read/` — frontend that lists data via `apps/api-read`
+
+## Commands (apps/sync-service)
 
 ```bash
+cd apps/sync-service
+
 # Install dependencies
 pip install -r requirements.txt
 
@@ -26,13 +41,13 @@ Required environment variables (Windows env vars, not a `.env` file):
 - `TEST_DATABASE_URL` — separate Postgres DB used only by `tests/conftest.py`; tests are skipped if unset.
 - `AZURE_DEVOPS_API_KEY` — Azure DevOps PAT used by `AdoClient`.
 
-## Architecture
+## Architecture (apps/sync-service)
 
 Flask app that polls Azure DevOps (via WIQL + work item batch REST calls) and syncs work items into Postgres, scoped per **area path**. Each area path is a row with its own schedule, lock, and checkpoint — the whole system is designed to run many of these concurrently and independently.
 
-Module responsibilities (`app/`):
+Module responsibilities (`apps/sync-service/app/`):
 - `ado_client.py` — thin Azure DevOps REST wrapper. Handles auth (Basic w/ PAT), retries on 429/5xx with `Retry-After` support, and raises `AdoAuthError` (401) / `AdoRetryExhaustedError` (retries exhausted) so callers can distinguish failure modes. `get_changed_ids` uses **date precision, not datetime** in the WIQL `ChangedDate` filter (ADO rejects a time component) — re-fetching a whole day is intentional and safe because upserts are idempotent.
-- `repository.py` — all SQL, using raw `psycopg` (no ORM). Every function takes a `conn` and does not commit; callers control transaction boundaries.
+- `repository.py` — all SQL, using raw `psycopg` (no ORM). Every function takes a `conn` and does not commit; callers control transaction boundaries. This is the only file in the monorepo that issues write SQL (INSERT/UPDATE/DELETE/UPSERT) — see `docs/adr/0002-single-writer.md`.
 - `sync_service.run_sync` — orchestrates one sync for one area path:
   1. `try_acquire_lock` (DB-row-based lock via `is_running` flag) — returns `skipped_running` if another sync is in progress for that area path.
   2. Full ID list fetch (`get_all_ids`) + incremental changed-ID fetch since the stored checkpoint (`get_changed_ids`).
