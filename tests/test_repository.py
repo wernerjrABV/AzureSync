@@ -99,6 +99,24 @@ def test_update_sync_result(db_conn):
     assert row["last_sync_status"] == "ok"
     assert row["last_sync_count"] == 42
     assert row["last_sync_at"] == now
+    assert row["last_error_msg"] is None
+
+
+def test_update_sync_result_stores_error_msg(db_conn):
+    import datetime
+
+    area_path_id = repo.create_area_path(db_conn, "org", "proj", "proj\\A")
+    db_conn.commit()
+
+    now = datetime.datetime(2026, 7, 15, 10, 0, 0)
+    repo.update_sync_result(
+        db_conn, area_path_id, status="error", count=0, synced_at=now, error_msg="boom"
+    )
+    db_conn.commit()
+
+    row = repo.get_area_path(db_conn, area_path_id)
+    assert row["last_sync_status"] == "error"
+    assert row["last_error_msg"] == "boom"
 
 
 import datetime

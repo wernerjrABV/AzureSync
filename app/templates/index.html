@@ -13,7 +13,7 @@
     <tr>
       <th>Org</th><th>Project</th><th>Area Path</th><th>Sub-paths</th>
       <th>Ativo</th><th>Intervalo (min)</th><th>Última sync</th>
-      <th>Status</th><th>Qtd processada</th><th>Ações</th>
+      <th>Status</th><th>Erro</th><th>Qtd processada</th><th>Ações</th>
     </tr>
     {% for row in area_paths %}
     <tr>
@@ -25,6 +25,7 @@
       <td>{{ row.intervalo_minutos }}</td>
       <td>{{ row.last_sync_at or "-" }}</td>
       <td>{{ row.last_sync_status or "-" }}</td>
+      <td>{{ row.last_error_msg or "-" }}</td>
       <td>{{ row.last_sync_count or 0 }}</td>
       <td>
         <form method="post" action="/area-paths/{{ row.id }}/sync" style="display:inline">

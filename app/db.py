@@ -15,6 +15,7 @@ CREATE TABLE IF NOT EXISTS area_paths (
     last_sync_at TIMESTAMP,
     last_sync_status TEXT,
     last_sync_count INTEGER,
+    last_error_msg TEXT,
     created_at TIMESTAMP NOT NULL DEFAULT now()
 );
 
@@ -44,6 +45,8 @@ CREATE TABLE IF NOT EXISTS sync_logs (
     items_processed INTEGER,
     error_msg TEXT
 );
+
+ALTER TABLE area_paths ADD COLUMN IF NOT EXISTS last_error_msg TEXT;
 """
 
 

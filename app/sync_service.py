@@ -19,7 +19,9 @@ def run_sync(conn, area_path_row: dict, client: AdoClient) -> dict:
         items_processed = _do_sync(conn, area_path_row, client)
         finished_at = datetime.datetime.now()
         repo.finish_sync_log(conn, log_id, finished_at, status="ok", items_processed=items_processed)
-        repo.update_sync_result(conn, area_path_id, status="ok", count=items_processed, synced_at=finished_at)
+        repo.update_sync_result(
+            conn, area_path_id, status="ok", count=items_processed, synced_at=finished_at, error_msg=None
+        )
         conn.commit()
         return {"status": "ok", "items_processed": items_processed}
 
@@ -62,8 +64,9 @@ def _do_sync(conn, area_path_row: dict, client: AdoClient) -> int:
 
 
 def _fail(conn, area_path_id: int, log_id: int, status: str, error_msg: str) -> dict:
+    conn.rollback()  # _do_sync may have left the transaction aborted; further writes need a clean slate
     finished_at = datetime.datetime.now()
     repo.finish_sync_log(conn, log_id, finished_at, status=status, items_processed=0, error_msg=error_msg)
-    repo.update_sync_result(conn, area_path_id, status=status, count=0, synced_at=finished_at)
+    repo.update_sync_result(conn, area_path_id, status=status, count=0, synced_at=finished_at, error_msg=error_msg)
     conn.commit()
     return {"status": status, "items_processed": 0}
