@@ -3,6 +3,12 @@ import datetime
 from app import repository as repo
 from app.ado_client import AdoAuthError, AdoClient, AdoRetryExhaustedError
 
+# Commit periodically during the per-item history backfill so a first-load sync over
+# thousands of work items doesn't hold one long-lived Postgres transaction open
+# (idle-in-transaction / lock retention risk). Value is arbitrary but small enough to
+# bound transaction length while still batching most commit overhead away.
+HISTORY_COMMIT_BATCH_SIZE = 50
+
 
 def run_sync(conn, area_path_row: dict, client: AdoClient) -> dict:
     area_path_id = area_path_row["id"]
@@ -62,10 +68,25 @@ def _do_sync(conn, area_path_row: dict, client: AdoClient) -> int:
 
     is_first_history_load = repo.get_history_loaded_at(conn, area_path_id) is None
     history_target_ids = current_ids if is_first_history_load else set(changed_ids)
-    for work_item_id in history_target_ids:
-        updates = client.get_work_item_updates(work_item_id)
-        repo.upsert_work_item_history(conn, area_path_id, work_item_id, updates)
-    if is_first_history_load:
+    any_history_failed = False
+    for processed_count, work_item_id in enumerate(history_target_ids, start=1):
+        try:
+            updates = client.get_work_item_updates(work_item_id)
+            repo.upsert_work_item_history(conn, area_path_id, work_item_id, updates)
+        except AdoAuthError:
+            # bad credentials will fail identically for every remaining item; let it
+            # propagate so run_sync reports auth_error and stops the sync immediately.
+            raise
+        except Exception:
+            # one poisoned item (e.g. AdoRetryExhaustedError from a permanently-erroring
+            # work item) must not stall history sync for every other item, nor abort the
+            # checkpoint/upsert/delete work already completed above (Finding 1).
+            any_history_failed = True
+
+        if processed_count % HISTORY_COMMIT_BATCH_SIZE == 0:
+            conn.commit()
+
+    if is_first_history_load and not any_history_failed:
         repo.set_history_loaded(conn, area_path_id, datetime.datetime.now())
 
     return len(items)

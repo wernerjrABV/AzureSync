@@ -253,5 +253,58 @@ def test_history_sync_failure_leaves_history_loaded_at_unset(db_conn):
     result = sync_service.run_sync(db_conn, row, client)
     db_conn.commit()
 
-    assert result["status"] == "error"
+    # a poison history item must not fail the whole sync (Finding 1)
+    assert result["status"] == "ok"
+    assert repo.get_history_loaded_at(db_conn, row["id"]) is None
+    updated = repo.get_area_path(db_conn, row["id"])
+    assert updated["last_sync_status"] == "ok"
+    assert updated["is_running"] is False
+
+
+def test_poison_history_item_does_not_block_other_items_or_checkpoint(db_conn):
+    row = _area_path_row(db_conn)
+    client = MagicMock()
+    client.get_all_ids.return_value = [1, 2, 3]
+    client.get_changed_ids.return_value = [1, 2, 3]
+    client.get_work_items_batch.return_value = [
+        {
+            "id": wid,
+            "title": f"Item {wid}",
+            "work_item_type": "Bug",
+            "state": "Active",
+            "assigned_to": None,
+            "changed_date": datetime.datetime(2026, 7, wid),
+            "raw_json": "{}",
+        }
+        for wid in (1, 2, 3)
+    ]
+
+    def _updates_side_effect(work_item_id):
+        if work_item_id == 2:
+            raise AdoRetryExhaustedError("permanently broken item")
+        return [
+            {
+                "rev": 1,
+                "revisedBy": {"uniqueName": "alice@example.com"},
+                "revisedDate": "2026-07-01T10:00:00Z",
+                "fields": {},
+            }
+        ]
+
+    client.get_work_item_updates.side_effect = _updates_side_effect
+
+    result = sync_service.run_sync(db_conn, row, client)
+    db_conn.commit()
+
+    # sync overall must still succeed: work item upserts/deletes/checkpoint aren't rolled back
+    assert result["status"] == "ok"
+    assert repo.get_work_item_ids(db_conn, row["id"]) == {1, 2, 3}
+    assert repo.get_checkpoint(db_conn, row["id"]) == datetime.datetime(2026, 7, 3)
+
+    # the poisoned item (2) has no history rows, but the healthy items (1, 3) do
+    with db_conn.cursor() as cur:
+        cur.execute("SELECT work_item_id FROM work_item_history ORDER BY work_item_id")
+        assert [r[0] for r in cur.fetchall()] == [1, 3]
+
+    # this was a first-load backfill and not every item succeeded, so history_loaded_at must stay unset
     assert repo.get_history_loaded_at(db_conn, row["id"]) is None
