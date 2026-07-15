@@ -1,34 +1,53 @@
-# Azure DevOps → PostgreSQL Sync
+# Azure DevOps Sync Monorepo
 
-Local app that syncs Azure DevOps work items (by area path) into an existing local PostgreSQL database.
+Enterprise monorepo for syncing Azure DevOps work items into PostgreSQL and
+(in future phases) exposing them for read-only consumption.
 
-## Setup
+## Layout
 
-1. Set Windows environment variables:
-   - `DATABASE_URL` — e.g. `postgresql://user:pass@localhost:5432/azure_sync`
-   - `AZURE_DEVOPS_API_KEY` — your Azure DevOps Personal Access Token
-2. Install dependencies:
-   ```
-   pip install -r requirements.txt
-   ```
-3. Run:
-   ```
-   python run.py
-   ```
-4. Open http://127.0.0.1:5000
-
-## Running tests
-
-Requires a local Postgres test database:
 ```
-createdb azure_sync_test
-set TEST_DATABASE_URL=postgresql://postgres:postgres@localhost:5432/azure_sync_test
-pytest
+apps/
+  sync-service/      Flask app — syncs Azure DevOps → PostgreSQL.
+                      The ONLY app in this repo authorized to write to
+                      the database. See apps/sync-service/README.md.
+packages/
+  shared-contracts/       (placeholder) DTOs/schemas shared across apps.
+  shared-config/          (placeholder) lint/formatter/convention templates.
+  shared-observability/   (placeholder) logging/tracing/metrics helpers.
+  shared-db-guidelines/   (placeholder) data-access documentation/utilities.
+docs/
+  architecture/       System-level architecture docs.
+  adr/                Architecture Decision Records.
+  standards/          Technology lifecycle / governance rules.
 ```
 
-## Usage
+## Running the sync service
 
-- Add an area path via the form on the home page (organization, project, area path, include sub-paths, active, interval in minutes).
-- First sync for a new area path is a full load; subsequent syncs are incremental and remove items no longer in scope.
-- Click "Sincronizar agora" to trigger a sync manually — disabled while a sync is already running for that area path.
-- A red banner appears at the top if any area path's last sync failed due to an invalid/expired token — check `AZURE_DEVOPS_API_KEY`.
+```bash
+cd apps/sync-service
+pip install -r requirements.txt
+python run.py
+```
+
+Open http://127.0.0.1:5000. See `apps/sync-service/README.md` for env vars
+and test setup.
+
+## Roadmap
+
+Today: `apps/sync-service` is the only app, and the only database writer.
+
+Next:
+1. `apps/api-read` — read-only backend querying the same database.
+2. `apps/web-read` — frontend listing data via `apps/api-read`.
+3. Database index review for the new read-heavy access pattern.
+
+Each of the above will land as its own design spec + implementation plan
+(see `docs/superpowers/specs/` and `docs/superpowers/plans/`) — this repo is
+built incrementally, not as a big-bang rewrite.
+
+## Governance
+
+- Architecture decisions: `docs/adr/`
+- Technology lifecycle (semestral review, V-2 annual upgrade rule):
+  `docs/standards/technology-lifecycle.md`
+- Single-writer rule: `docs/adr/0002-single-writer.md`
