@@ -162,3 +162,70 @@ def test_retry_after_header_overrides_default_delay(mock_post, mock_sleep):
     client.get_all_ids("proj\\A", incluir_subpaths=True)
 
     mock_sleep.assert_called_once_with(20)
+
+
+@patch("app.ado_client.requests.get")
+def test_get_work_item_updates_single_page(mock_get):
+    mock_get.return_value = _response(
+        200,
+        {
+            "value": [
+                {
+                    "id": 1,
+                    "rev": 2,
+                    "revisedBy": {"uniqueName": "alice@example.com"},
+                    "revisedDate": "2026-07-01T12:00:00Z",
+                    "fields": {"System.State": {"oldValue": "New", "newValue": "Active"}},
+                }
+            ]
+        },
+    )
+
+    client = AdoClient("org", "proj", pat="fake-pat")
+    updates = client.get_work_item_updates(42)
+
+    assert len(updates) == 1
+    assert updates[0]["rev"] == 2
+    sent_url = mock_get.call_args.args[0]
+    assert "workitems/42/updates" in sent_url
+    assert "api-version=7.1" in sent_url
+
+
+@patch("app.ado_client.requests.get")
+def test_get_work_item_updates_paginates_until_empty_page(mock_get):
+    page1 = {"value": [{"id": 1, "rev": i} for i in range(100)]}
+    page2 = {"value": [{"id": 1, "rev": 100}]}
+    page3 = {"value": []}
+    mock_get.side_effect = [_response(200, page1), _response(200, page2), _response(200, page3)]
+
+    client = AdoClient("org", "proj", pat="fake-pat")
+    updates = client.get_work_item_updates(42)
+
+    assert len(updates) == 101
+    assert mock_get.call_count == 3
+    skips = [call.kwargs.get("params", {}).get("$skip") for call in mock_get.call_args_list]
+    assert skips == [0, 100, 200]
+
+
+@patch("app.ado_client.requests.get")
+def test_get_work_item_updates_401_raises_auth_error(mock_get):
+    mock_get.return_value = _response(401)
+
+    client = AdoClient("org", "proj", pat="bad-pat")
+    with pytest.raises(AdoAuthError):
+        client.get_work_item_updates(42)
+
+
+@patch("app.ado_client.time.sleep")
+@patch("app.ado_client.requests.get")
+def test_get_work_item_updates_retries_on_429(mock_get, mock_sleep):
+    mock_get.side_effect = [
+        _response(429),
+        _response(200, {"value": []}),
+    ]
+
+    client = AdoClient("org", "proj", pat="fake-pat")
+    updates = client.get_work_item_updates(42)
+
+    assert updates == []
+    mock_sleep.assert_called_once_with(5)
