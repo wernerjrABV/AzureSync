@@ -166,20 +166,18 @@ def test_retry_after_header_overrides_default_delay(mock_post, mock_sleep):
 
 @patch("app.ado_client.requests.get")
 def test_get_work_item_updates_single_page(mock_get):
-    mock_get.return_value = _response(
-        200,
-        {
-            "value": [
-                {
-                    "id": 1,
-                    "rev": 2,
-                    "revisedBy": {"uniqueName": "alice@example.com"},
-                    "revisedDate": "2026-07-01T12:00:00Z",
-                    "fields": {"System.State": {"oldValue": "New", "newValue": "Active"}},
-                }
-            ]
-        },
-    )
+    page1 = {
+        "value": [
+            {
+                "id": 1,
+                "rev": 2,
+                "revisedBy": {"uniqueName": "alice@example.com"},
+                "revisedDate": "2026-07-01T12:00:00Z",
+                "fields": {"System.State": {"oldValue": "New", "newValue": "Active"}},
+            }
+        ]
+    }
+    mock_get.side_effect = [_response(200, page1), _response(200, {"value": []})]
 
     client = AdoClient("org", "proj", pat="fake-pat")
     updates = client.get_work_item_updates(42)

@@ -27,10 +27,10 @@ class AdoClient:
     def _auth(self):
         return ("", self.pat)
 
-    def _post_with_retry(self, url: str, json_body: dict) -> dict:
+    def _request_with_retry(self, request_func, url: str, **kwargs) -> dict:
         last_status = None
         for attempt in range(len(RETRY_DELAYS)):
-            response = requests.post(url, json=json_body, auth=self._auth())
+            response = request_func(url, auth=self._auth(), **kwargs)
 
             if response.status_code == 401:
                 raise AdoAuthError(f"Azure DevOps rejected credentials (401) calling {url}")
@@ -60,6 +60,9 @@ class AdoClient:
         raise AdoRetryExhaustedError(
             f"Exhausted retries calling {url}, last status={last_status}"
         )
+
+    def _post_with_retry(self, url: str, json_body: dict) -> dict:
+        return self._request_with_retry(requests.post, url, json=json_body)
 
     def _wiql_query(self, query: str) -> list[int]:
         url = f"https://dev.azure.com/{self.organization}/{self.project}/_apis/wit/wiql?api-version={API_VERSION}"
@@ -102,38 +105,7 @@ class AdoClient:
         return results
 
     def _get_with_retry(self, url: str, params: dict) -> dict:
-        last_status = None
-        for attempt in range(len(RETRY_DELAYS)):
-            response = requests.get(url, params=params, auth=self._auth())
-
-            if response.status_code == 401:
-                raise AdoAuthError(f"Azure DevOps rejected credentials (401) calling {url}")
-
-            if response.status_code in (429, 500, 502, 503, 504):
-                last_status = response.status_code
-                delay = RETRY_DELAYS[attempt]
-                retry_after = response.headers.get("Retry-After")
-                if retry_after:
-                    try:
-                        delay = max(delay, int(retry_after))
-                    except ValueError:
-                        pass
-                time.sleep(delay)
-                continue
-
-            if response.status_code >= 400:
-                try:
-                    detail = response.json().get("message", response.text)
-                except ValueError:
-                    detail = response.text
-                raise requests.HTTPError(
-                    f"{response.status_code} error calling {url}: {detail}", response=response
-                )
-            return response.json()
-
-        raise AdoRetryExhaustedError(
-            f"Exhausted retries calling {url}, last status={last_status}"
-        )
+        return self._request_with_retry(requests.get, url, params=params)
 
     def get_work_item_updates(self, work_item_id: int) -> list[dict]:
         url = (
@@ -143,24 +115,14 @@ class AdoClient:
         page_size = 100
         results: list[dict] = []
         skip = 0
-        last_max_rev = None
         while True:
             body = self._get_with_retry(url, {"$top": page_size, "$skip": skip})
             page = body.get("value", [])
             if not page:
                 break
 
-            revs = [item["rev"] for item in page if item.get("rev") is not None]
-            max_rev = max(revs) if revs else None
-            # Guard against a server (or, in tests, a mock) returning the same page again:
-            # revisions are strictly increasing, so if the new page makes no forward
-            # progress there is nothing left to fetch.
-            if last_max_rev is not None and max_rev is not None and max_rev <= last_max_rev:
-                break
-
             results.extend(page)
             skip += page_size
-            last_max_rev = max_rev
         return results
 
     @staticmethod
