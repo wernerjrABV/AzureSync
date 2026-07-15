@@ -57,9 +57,9 @@ at `docs/architecture/read-path-architecture.md`.
 - `apps/sync-service` — the only database writer (syncs Azure DevOps to PostgreSQL).
 - `apps/api-read` — read-only backend querying the same database.
 - `apps/web-read` — frontend listing data via `apps/api-read`.
+- Database index review for the read-heavy access pattern.
 
 **Next:**
-- Database index review for the read-heavy access pattern.
 
 Each phase lands as its own design spec + implementation plan
 (see `docs/superpowers/specs/` and `docs/superpowers/plans/`) — this repo is
