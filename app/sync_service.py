@@ -60,6 +60,14 @@ def _do_sync(conn, area_path_row: dict, client: AdoClient) -> int:
         max_changed_date = max(item["changed_date"] for item in items if item["changed_date"])
         repo.set_checkpoint(conn, area_path_id, max_changed_date)
 
+    is_first_history_load = repo.get_history_loaded_at(conn, area_path_id) is None
+    history_target_ids = current_ids if is_first_history_load else set(changed_ids)
+    for work_item_id in history_target_ids:
+        updates = client.get_work_item_updates(work_item_id)
+        repo.upsert_work_item_history(conn, area_path_id, work_item_id, updates)
+    if is_first_history_load:
+        repo.set_history_loaded(conn, area_path_id, datetime.datetime.now())
+
     return len(items)
 
 

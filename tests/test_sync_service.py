@@ -167,3 +167,91 @@ def test_db_error_mid_sync_rolls_back_before_recording_failure(db_conn):
     assert updated["last_sync_status"] == "error"
     assert "zero" in updated["last_error_msg"]  # Postgres error text, locale-dependent (e.g. "division by zero")
     assert updated["is_running"] is False
+
+
+def test_first_sync_backfills_history_for_all_current_ids_and_marks_loaded(db_conn):
+    row = _area_path_row(db_conn)
+    client = MagicMock()
+    client.get_all_ids.return_value = [1, 2]
+    client.get_changed_ids.return_value = [1]  # only item 1 changed
+    client.get_work_items_batch.return_value = [
+        {
+            "id": 1,
+            "title": "A",
+            "work_item_type": "Bug",
+            "state": "Active",
+            "assigned_to": None,
+            "changed_date": datetime.datetime(2026, 7, 1),
+            "raw_json": "{}",
+        }
+    ]
+    client.get_work_item_updates.return_value = [
+        {"rev": 1, "revisedBy": {"uniqueName": "alice@example.com"}, "revisedDate": "2026-07-01T10:00:00Z", "fields": {}}
+    ]
+
+    result = sync_service.run_sync(db_conn, row, client)
+    db_conn.commit()
+
+    assert result["status"] == "ok"
+    # first sync: history fetched for every current id (1 and 2), not just the changed one
+    called_ids = sorted(call.args[0] for call in client.get_work_item_updates.call_args_list)
+    assert called_ids == [1, 2]
+    assert repo.get_history_loaded_at(db_conn, row["id"]) is not None
+    with db_conn.cursor() as cur:
+        cur.execute("SELECT COUNT(*) FROM work_item_history WHERE work_item_id IN (1, 2)")
+        assert cur.fetchone()[0] == 2
+
+
+def test_subsequent_sync_only_fetches_history_for_delta(db_conn):
+    row = _area_path_row(db_conn)
+    repo.set_history_loaded(db_conn, row["id"], datetime.datetime(2026, 7, 10))
+    db_conn.commit()
+    row = repo.get_area_path(db_conn, row["id"])
+
+    client = MagicMock()
+    client.get_all_ids.return_value = [1, 2]
+    client.get_changed_ids.return_value = [2]  # only item 2 changed this cycle
+    client.get_work_items_batch.return_value = [
+        {
+            "id": 2,
+            "title": "B",
+            "work_item_type": "Task",
+            "state": "New",
+            "assigned_to": None,
+            "changed_date": datetime.datetime(2026, 7, 15),
+            "raw_json": "{}",
+        }
+    ]
+    client.get_work_item_updates.return_value = []
+
+    result = sync_service.run_sync(db_conn, row, client)
+    db_conn.commit()
+
+    assert result["status"] == "ok"
+    called_ids = [call.args[0] for call in client.get_work_item_updates.call_args_list]
+    assert called_ids == [2]
+
+
+def test_history_sync_failure_leaves_history_loaded_at_unset(db_conn):
+    row = _area_path_row(db_conn)
+    client = MagicMock()
+    client.get_all_ids.return_value = [1]
+    client.get_changed_ids.return_value = [1]
+    client.get_work_items_batch.return_value = [
+        {
+            "id": 1,
+            "title": "A",
+            "work_item_type": "Bug",
+            "state": "Active",
+            "assigned_to": None,
+            "changed_date": datetime.datetime(2026, 7, 1),
+            "raw_json": "{}",
+        }
+    ]
+    client.get_work_item_updates.side_effect = AdoRetryExhaustedError("gave up")
+
+    result = sync_service.run_sync(db_conn, row, client)
+    db_conn.commit()
+
+    assert result["status"] == "error"
+    assert repo.get_history_loaded_at(db_conn, row["id"]) is None
