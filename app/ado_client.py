@@ -47,7 +47,14 @@ class AdoClient:
                 time.sleep(delay)
                 continue
 
-            response.raise_for_status()
+            if response.status_code >= 400:
+                try:
+                    detail = response.json().get("message", response.text)
+                except ValueError:
+                    detail = response.text
+                raise requests.HTTPError(
+                    f"{response.status_code} error calling {url}: {detail}", response=response
+                )
             return response.json()
 
         raise AdoRetryExhaustedError(
@@ -74,7 +81,10 @@ class AdoClient:
             f"'{self.project}' AND [System.AreaPath] {operator} '{area_path}'"
         )
         if since is not None:
-            query += f" AND [System.ChangedDate] > '{since.strftime('%Y-%m-%dT%H:%M:%S')}'"
+            # This project uses date precision, not datetime precision: WIQL rejects a time
+            # component ("You cannot supply a time with the date..."). Use >= on the date only,
+            # re-fetching that day's items is harmless since upserts are idempotent.
+            query += f" AND [System.ChangedDate] >= '{since.strftime('%Y-%m-%d')}'"
         return self._wiql_query(query)
 
     def get_work_items_batch(self, ids: list[int]) -> list[dict]:
