@@ -11,8 +11,8 @@ the data ingestion pipeline and the only database writer.
 | App | Responsibility | DB access |
 |---|---|---|
 | `apps/sync-service` | Poll Azure DevOps, normalize, persist work items/history/checkpoints | **read + write** (only writer) |
-| `apps/api-read` (planned) | Serve read-only queries over the same database | read-only |
-| `apps/web-read` (planned) | List data to end users via `apps/api-read` | none (HTTP client of api-read only) |
+| `apps/api-read` | Serve read-only queries over the same database | read-only |
+| `apps/web-read` | List data to end users via `apps/api-read` | none (HTTP client of api-read only) |
 
 ## The single-writer rule
 
@@ -38,12 +38,12 @@ apps/sync-service  (WIQL + batch fetch → normalize → upsert)
         │  writes
         ▼
    PostgreSQL
-        │  reads (planned)
+        │  reads
         ▼
-apps/api-read       (read-only query layer, planned)
-        │  HTTP (planned)
+apps/api-read       (read-only query layer)
+        │  HTTP
         ▼
-apps/web-read       (listing UI, planned)
+apps/web-read       (listing UI)
 ```
 
 ## Shared packages
