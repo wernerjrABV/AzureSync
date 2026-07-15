@@ -29,6 +29,16 @@ def create_app(conn_factory=db.get_connection) -> Flask:
         conn.commit()
         return redirect("/")
 
+    @app.route("/area-paths/<int:area_path_id>/edit", methods=["GET"])
+    def edit_area_path_form(area_path_id):
+        conn = conn_factory()
+        rows = repo.list_area_paths(conn)
+        editing = repo.get_area_path(conn, area_path_id)
+        auth_error = any(row["last_sync_status"] == "auth_error" for row in rows)
+        return render_template(
+            "index.html", area_paths=rows, auth_error=auth_error, editing=editing
+        )
+
     @app.route("/area-paths/<int:area_path_id>/edit", methods=["POST"])
     def edit_area_path(area_path_id):
         conn = conn_factory()

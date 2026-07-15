@@ -1,9 +1,30 @@
-<form method="post" action="/area-paths">
-  <label>Organization: <input name="organization" required></label><br>
-  <label>Project: <input name="project" required></label><br>
-  <label>Area Path: <input name="area_path" required></label><br>
-  <label>Incluir sub-paths: <input type="checkbox" name="incluir_subpaths" checked></label><br>
-  <label>Ativo: <input type="checkbox" name="ativo" checked></label><br>
-  <label>Intervalo (minutos): <input type="number" name="intervalo_minutos" value="60"></label><br>
-  <button type="submit">Salvar</button>
+<form method="post" action="/area-paths" id="area-path-form" class="form-grid">
+  <div class="form-field">
+    <label for="organization">Organization</label>
+    <input id="organization" type="text" name="organization" value="" required>
+  </div>
+  <div class="form-field">
+    <label for="project">Project</label>
+    <input id="project" type="text" name="project" value="" required>
+  </div>
+  <div class="form-field">
+    <label for="area_path">Area Path</label>
+    <input id="area_path" type="text" name="area_path" value="" required>
+  </div>
+  <div class="form-check">
+    <input id="incluir_subpaths" type="checkbox" name="incluir_subpaths" checked>
+    <label for="incluir_subpaths">Incluir sub-paths</label>
+  </div>
+  <div class="form-check">
+    <input id="ativo" type="checkbox" name="ativo" checked>
+    <label for="ativo">Ativo</label>
+  </div>
+  <div class="form-field">
+    <label for="intervalo_minutos">Intervalo (minutos)</label>
+    <input id="intervalo_minutos" type="number" name="intervalo_minutos" value="60">
+  </div>
+  <div class="form-actions">
+    <button type="submit" id="form-submit-btn" class="btn btn-primary">Salvar</button>
+    <a href="#" onclick="closeFormModal(); return false;">Cancelar</a>
+  </div>
 </form>

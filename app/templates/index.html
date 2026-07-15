@@ -1,45 +1,142 @@
 <!doctype html>
-<html>
-<head><title>Azure DevOps Sync</title></head>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8">
+  <title>Azure DevOps Sync</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
 <body>
-  {% if auth_error %}
-    <div style="background:#fdd;color:#900;padding:10px;border:1px solid #900;">
-      Token inválido/expirado — verifique AZURE_DEVOPS_API_KEY
+  <div class="page">
+    {% if auth_error %}
+      <div class="alert alert-danger">
+        Token inválido/expirado — verifique AZURE_DEVOPS_API_KEY
+      </div>
+    {% endif %}
+
+    <div class="page-header">
+      <h1>Area Paths</h1>
+      <button type="button" class="btn btn-primary" onclick="openCreateModal()">+ Novo Area Path</button>
     </div>
-  {% endif %}
 
-  <h1>Area Paths</h1>
-  <table border="1" cellpadding="4">
-    <tr>
-      <th>Org</th><th>Project</th><th>Area Path</th><th>Sub-paths</th>
-      <th>Ativo</th><th>Intervalo (min)</th><th>Última sync</th>
-      <th>Status</th><th>Erro</th><th>Qtd processada</th><th>Ações</th>
-    </tr>
-    {% for row in area_paths %}
-    <tr>
-      <td>{{ row.organization }}</td>
-      <td>{{ row.project }}</td>
-      <td>{{ row.area_path }}</td>
-      <td>{{ "Sim" if row.incluir_subpaths else "Não" }}</td>
-      <td>{{ "Sim" if row.ativo else "Não" }}</td>
-      <td>{{ row.intervalo_minutos }}</td>
-      <td>{{ row.last_sync_at or "-" }}</td>
-      <td>{{ row.last_sync_status or "-" }}</td>
-      <td>{{ row.last_error_msg or "-" }}</td>
-      <td>{{ row.last_sync_count or 0 }}</td>
-      <td>
-        <form method="post" action="/area-paths/{{ row.id }}/sync" style="display:inline">
-          <button type="submit" {{ "disabled" if row.is_running else "" }}>Sincronizar agora</button>
-        </form>
-        <form method="post" action="/area-paths/{{ row.id }}/delete" style="display:inline">
-          <button type="submit">Excluir</button>
-        </form>
-      </td>
-    </tr>
-    {% endfor %}
-  </table>
+    {% if area_paths %}
+    <div class="card-grid">
+      {% for row in area_paths %}
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">
+            {{ row.organization }} / {{ row.project }}
+            <span class="area-path">{{ row.area_path }}</span>
+          </div>
+          {% if row.is_running %}
+            <span class="pill pill-neutral">Executando</span>
+          {% elif row.last_sync_status == "ok" %}
+            <span class="pill pill-success">OK</span>
+          {% elif row.last_sync_status %}
+            <span class="pill pill-danger">{{ row.last_sync_status }}</span>
+          {% else %}
+            <span class="pill pill-neutral">Sem sync</span>
+          {% endif %}
+        </div>
 
-  <h2>Novo Area Path</h2>
-  {% include "area_path_form.html" %}
+        <dl class="card-details">
+          <dt>Ativo</dt>
+          <dd>{{ "Sim" if row.ativo else "Não" }}</dd>
+          <dt>Sub-paths</dt>
+          <dd>{{ "Sim" if row.incluir_subpaths else "Não" }}</dd>
+          <dt>Intervalo</dt>
+          <dd>{{ row.intervalo_minutos }} min</dd>
+          <dt>Última sync</dt>
+          <dd>{{ row.last_sync_at or "-" }}</dd>
+          <dt>Qtd processada</dt>
+          <dd>{{ row.last_sync_count or 0 }}</dd>
+          {% if row.last_error_msg %}
+          <dt>Erro</dt>
+          <dd class="error">{{ row.last_error_msg }}</dd>
+          {% endif %}
+        </dl>
+
+        <div class="card-actions">
+          <form method="post" action="/area-paths/{{ row.id }}/sync">
+            <button type="submit" class="btn btn-primary btn-sm" {{ "disabled" if row.is_running else "" }}>Sincronizar</button>
+          </form>
+          <button
+            type="button"
+            class="btn btn-outline btn-sm"
+            onclick="openEditModal(this)"
+            data-id="{{ row.id }}"
+            data-organization="{{ row.organization }}"
+            data-project="{{ row.project }}"
+            data-area-path="{{ row.area_path }}"
+            data-subpaths="{{ 'true' if row.incluir_subpaths else 'false' }}"
+            data-ativo="{{ 'true' if row.ativo else 'false' }}"
+            data-intervalo="{{ row.intervalo_minutos }}"
+          >Editar</button>
+          <form method="post" action="/area-paths/{{ row.id }}/delete">
+            <button type="submit" class="btn btn-danger-ghost btn-sm">Excluir</button>
+          </form>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <p class="empty-state">Nenhum area path cadastrado ainda.</p>
+    {% endif %}
+
+    <div class="modal-overlay" id="form-modal" onclick="if (event.target === this) closeFormModal()">
+      <div class="modal">
+        <div class="modal-header">
+          <h2 id="modal-title">Novo Area Path</h2>
+          <button type="button" class="modal-close" onclick="closeFormModal()" aria-label="Fechar">&times;</button>
+        </div>
+        {% include "area_path_form.html" %}
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const formModal = document.getElementById('form-modal');
+    const areaPathForm = document.getElementById('area-path-form');
+    const modalTitle = document.getElementById('modal-title');
+
+    function showFormModal() {
+      formModal.classList.add('open');
+    }
+
+    function closeFormModal() {
+      formModal.classList.remove('open');
+    }
+
+    function openCreateModal() {
+      areaPathForm.action = '/area-paths';
+      areaPathForm.reset();
+      document.getElementById('organization').value = '';
+      document.getElementById('project').value = '';
+      document.getElementById('area_path').value = '';
+      document.getElementById('incluir_subpaths').checked = true;
+      document.getElementById('ativo').checked = true;
+      document.getElementById('intervalo_minutos').value = 60;
+      modalTitle.textContent = 'Novo Area Path';
+      showFormModal();
+    }
+
+    function openEditModal(btn) {
+      areaPathForm.action = '/area-paths/' + btn.dataset.id + '/edit';
+      document.getElementById('organization').value = btn.dataset.organization;
+      document.getElementById('project').value = btn.dataset.project;
+      document.getElementById('area_path').value = btn.dataset.areaPath;
+      document.getElementById('incluir_subpaths').checked = btn.dataset.subpaths === 'true';
+      document.getElementById('ativo').checked = btn.dataset.ativo === 'true';
+      document.getElementById('intervalo_minutos').value = btn.dataset.intervalo;
+      modalTitle.textContent = 'Editar Area Path';
+      showFormModal();
+    }
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') closeFormModal();
+    });
+  </script>
 </body>
 </html>
