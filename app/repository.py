@@ -125,8 +125,8 @@ def upsert_work_items(conn: psycopg.Connection, area_path_id: int, items: list[d
             cur.execute(
                 """
                 INSERT INTO work_items
-                    (id, area_path_id, title, work_item_type, state, assigned_to, changed_date, raw_json, synced_at)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, now())
+                    (id, area_path_id, title, work_item_type, state, assigned_to, changed_date, parent_id, raw_json, synced_at)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, now())
                 ON CONFLICT (id) DO UPDATE SET
                     area_path_id = EXCLUDED.area_path_id,
                     title = EXCLUDED.title,
@@ -134,6 +134,7 @@ def upsert_work_items(conn: psycopg.Connection, area_path_id: int, items: list[d
                     state = EXCLUDED.state,
                     assigned_to = EXCLUDED.assigned_to,
                     changed_date = EXCLUDED.changed_date,
+                    parent_id = EXCLUDED.parent_id,
                     raw_json = EXCLUDED.raw_json,
                     synced_at = now()
                 """,
@@ -145,6 +146,7 @@ def upsert_work_items(conn: psycopg.Connection, area_path_id: int, items: list[d
                     item["state"],
                     item["assigned_to"],
                     item["changed_date"],
+                    item.get("parent_id"),
                     item["raw_json"],
                 ),
             )

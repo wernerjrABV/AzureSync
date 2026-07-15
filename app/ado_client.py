@@ -99,7 +99,7 @@ class AdoClient:
         results = []
         for start in range(0, len(ids), 200):
             chunk = ids[start : start + 200]
-            body = self._post_with_retry(url, {"ids": chunk, "$expand": "fields"})
+            body = self._post_with_retry(url, {"ids": chunk, "$expand": "all"})
             for raw in body.get("value", []):
                 results.append(self._map_work_item(raw))
         return results
@@ -142,6 +142,13 @@ class AdoClient:
                 changed_date_raw.split(".")[0].rstrip("Z"), "%Y-%m-%dT%H:%M:%S"
             )
 
+        parent_id = fields.get("System.Parent")
+        if parent_id is None:
+            for relation in raw.get("relations", []):
+                if relation.get("rel") == "System.LinkTypes.Hierarchy-Reverse":
+                    parent_id = int(relation["url"].rsplit("/", 1)[-1])
+                    break
+
         return {
             "id": raw["id"],
             "title": fields.get("System.Title"),
@@ -149,5 +156,6 @@ class AdoClient:
             "state": fields.get("System.State"),
             "assigned_to": assigned_to,
             "changed_date": changed_date,
+            "parent_id": parent_id,
             "raw_json": json.dumps(raw),
         }

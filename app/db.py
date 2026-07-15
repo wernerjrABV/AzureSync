@@ -27,6 +27,7 @@ CREATE TABLE IF NOT EXISTS work_items (
     state TEXT,
     assigned_to TEXT,
     changed_date TIMESTAMP,
+    parent_id INTEGER,
     raw_json JSONB,
     synced_at TIMESTAMP NOT NULL DEFAULT now()
 );
@@ -59,6 +60,7 @@ CREATE TABLE IF NOT EXISTS work_item_history (
 
 ALTER TABLE area_paths ADD COLUMN IF NOT EXISTS last_error_msg TEXT;
 ALTER TABLE area_paths ADD COLUMN IF NOT EXISTS history_loaded_at TIMESTAMP;
+ALTER TABLE work_items ADD COLUMN IF NOT EXISTS parent_id INTEGER;
 """
 
 
