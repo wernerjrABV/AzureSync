@@ -82,18 +82,11 @@ class AdoClient:
             return []
 
         url = f"https://dev.azure.com/{self.organization}/_apis/wit/workitemsbatch?api-version={API_VERSION}"
-        fields = [
-            "System.Title",
-            "System.WorkItemType",
-            "System.State",
-            "System.AssignedTo",
-            "System.ChangedDate",
-        ]
 
         results = []
         for start in range(0, len(ids), 200):
             chunk = ids[start : start + 200]
-            body = self._post_with_retry(url, {"ids": chunk, "fields": fields})
+            body = self._post_with_retry(url, {"ids": chunk, "$expand": "fields"})
             for raw in body.get("value", []):
                 results.append(self._map_work_item(raw))
         return results

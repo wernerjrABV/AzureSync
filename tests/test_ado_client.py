@@ -76,6 +76,7 @@ def test_get_work_items_batch_maps_fields(mock_post):
                         "System.State": "Active",
                         "System.AssignedTo": {"displayName": "Alice", "uniqueName": "alice@example.com"},
                         "System.ChangedDate": "2026-07-01T12:00:00Z",
+                        "Custom.Squad": "Platform",
                     },
                 }
             ]
@@ -93,7 +94,21 @@ def test_get_work_items_batch_maps_fields(mock_post):
     assert item["state"] == "Active"
     assert item["assigned_to"] == "alice@example.com"
     assert item["changed_date"] == datetime.datetime(2026, 7, 1, 12, 0, 0)
-    assert json.loads(item["raw_json"])["id"] == 1
+    raw = json.loads(item["raw_json"])
+    assert raw["id"] == 1
+    assert raw["fields"]["Custom.Squad"] == "Platform"
+
+
+@patch("app.ado_client.requests.post")
+def test_get_work_items_batch_requests_all_fields_via_expand(mock_post):
+    mock_post.return_value = _response(200, {"value": []})
+
+    client = AdoClient("org", "proj", pat="fake-pat")
+    client.get_work_items_batch([1])
+
+    sent_body = mock_post.call_args.kwargs["json"]
+    assert sent_body["$expand"] == "fields"
+    assert "fields" not in sent_body
 
 
 @patch("app.ado_client.requests.post")
