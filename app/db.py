@@ -46,7 +46,19 @@ CREATE TABLE IF NOT EXISTS sync_logs (
     error_msg TEXT
 );
 
+CREATE TABLE IF NOT EXISTS work_item_history (
+    work_item_id INTEGER NOT NULL,
+    area_path_id INTEGER NOT NULL REFERENCES area_paths(id),
+    rev INTEGER NOT NULL,
+    revised_by TEXT,
+    revised_date TIMESTAMP,
+    raw_json JSONB,
+    synced_at TIMESTAMP NOT NULL DEFAULT now(),
+    PRIMARY KEY (work_item_id, rev)
+);
+
 ALTER TABLE area_paths ADD COLUMN IF NOT EXISTS last_error_msg TEXT;
+ALTER TABLE area_paths ADD COLUMN IF NOT EXISTS history_loaded_at TIMESTAMP;
 """
 
 

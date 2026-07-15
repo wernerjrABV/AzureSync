@@ -18,7 +18,7 @@ def db_conn():
 
     with conn.cursor() as cur:
         cur.execute(
-            "TRUNCATE sync_logs, sync_checkpoints, work_items, area_paths RESTART IDENTITY CASCADE"
+            "TRUNCATE sync_logs, sync_checkpoints, work_item_history, work_items, area_paths RESTART IDENTITY CASCADE"
         )
     conn.commit()
 
