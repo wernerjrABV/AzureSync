@@ -48,7 +48,7 @@ def test_get_changed_ids_includes_changed_date_filter(mock_post):
     client.get_changed_ids("proj\\Team A", incluir_subpaths=True, since=since)
 
     sent_query = mock_post.call_args.kwargs["json"]["query"]
-    assert "[System.ChangedDate] > '2026-07-01 12:00:00'" in sent_query
+    assert "[System.ChangedDate] > '2026-07-01T12:00:00'" in sent_query
 
 
 @patch("app.ado_client.requests.post")

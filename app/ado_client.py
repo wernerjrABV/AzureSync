@@ -74,7 +74,7 @@ class AdoClient:
             f"'{self.project}' AND [System.AreaPath] {operator} '{area_path}'"
         )
         if since is not None:
-            query += f" AND [System.ChangedDate] > '{since.strftime('%Y-%m-%d %H:%M:%S')}'"
+            query += f" AND [System.ChangedDate] > '{since.strftime('%Y-%m-%dT%H:%M:%S')}'"
         return self._wiql_query(query)
 
     def get_work_items_batch(self, ids: list[int]) -> list[dict]:
