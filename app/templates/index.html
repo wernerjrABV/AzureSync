@@ -1,0 +1,44 @@
+<!doctype html>
+<html>
+<head><title>Azure DevOps Sync</title></head>
+<body>
+  {% if auth_error %}
+    <div style="background:#fdd;color:#900;padding:10px;border:1px solid #900;">
+      Token inválido/expirado — verifique AZURE_DEVOPS_API_KEY
+    </div>
+  {% endif %}
+
+  <h1>Area Paths</h1>
+  <table border="1" cellpadding="4">
+    <tr>
+      <th>Org</th><th>Project</th><th>Area Path</th><th>Sub-paths</th>
+      <th>Ativo</th><th>Intervalo (min)</th><th>Última sync</th>
+      <th>Status</th><th>Qtd processada</th><th>Ações</th>
+    </tr>
+    {% for row in area_paths %}
+    <tr>
+      <td>{{ row.organization }}</td>
+      <td>{{ row.project }}</td>
+      <td>{{ row.area_path }}</td>
+      <td>{{ "Sim" if row.incluir_subpaths else "Não" }}</td>
+      <td>{{ "Sim" if row.ativo else "Não" }}</td>
+      <td>{{ row.intervalo_minutos }}</td>
+      <td>{{ row.last_sync_at or "-" }}</td>
+      <td>{{ row.last_sync_status or "-" }}</td>
+      <td>{{ row.last_sync_count or 0 }}</td>
+      <td>
+        <form method="post" action="/area-paths/{{ row.id }}/sync" style="display:inline">
+          <button type="submit" {{ "disabled" if row.is_running else "" }}>Sincronizar agora</button>
+        </form>
+        <form method="post" action="/area-paths/{{ row.id }}/delete" style="display:inline">
+          <button type="submit">Excluir</button>
+        </form>
+      </td>
+    </tr>
+    {% endfor %}
+  </table>
+
+  <h2>Novo Area Path</h2>
+  {% include "area_path_form.html" %}
+</body>
+</html>
