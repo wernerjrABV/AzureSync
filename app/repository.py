@@ -1,3 +1,6 @@
+import datetime
+import json
+
 import psycopg
 from psycopg.rows import dict_row
 
@@ -183,3 +186,61 @@ def finish_sync_log(
             """,
             (finished_at, status, items_processed, error_msg, log_id),
         )
+
+
+def _parse_revised_date(value: str | None) -> datetime.datetime | None:
+    if not value:
+        return None
+    return datetime.datetime.strptime(value.split(".")[0].rstrip("Z"), "%Y-%m-%dT%H:%M:%S")
+
+
+def upsert_work_item_history(
+    conn: psycopg.Connection, area_path_id: int, work_item_id: int, updates: list[dict]
+) -> None:
+    if not updates:
+        return
+    with conn.cursor() as cur:
+        for update in updates:
+            revised_by_field = update.get("revisedBy")
+            revised_by = (
+                revised_by_field.get("uniqueName")
+                if isinstance(revised_by_field, dict)
+                else revised_by_field
+            )
+            cur.execute(
+                """
+                INSERT INTO work_item_history
+                    (work_item_id, area_path_id, rev, revised_by, revised_date, raw_json, synced_at)
+                VALUES (%s, %s, %s, %s, %s, %s, now())
+                ON CONFLICT (work_item_id, rev) DO UPDATE SET
+                    area_path_id = EXCLUDED.area_path_id,
+                    revised_by = EXCLUDED.revised_by,
+                    revised_date = EXCLUDED.revised_date,
+                    raw_json = EXCLUDED.raw_json,
+                    synced_at = now()
+                """,
+                (
+                    work_item_id,
+                    area_path_id,
+                    update["rev"],
+                    revised_by,
+                    _parse_revised_date(update.get("revisedDate")),
+                    json.dumps(update),
+                ),
+            )
+
+
+def set_history_loaded(conn: psycopg.Connection, area_path_id: int, when) -> None:
+    with conn.cursor() as cur:
+        cur.execute(
+            "UPDATE area_paths SET history_loaded_at = %s WHERE id = %s", (when, area_path_id)
+        )
+
+
+def get_history_loaded_at(conn: psycopg.Connection, area_path_id: int):
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT history_loaded_at FROM area_paths WHERE id = %s", (area_path_id,)
+        )
+        row = cur.fetchone()
+        return row[0] if row else None

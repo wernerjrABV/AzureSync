@@ -233,3 +233,81 @@ def test_sync_log_lifecycle(db_conn):
     assert row["items_processed"] == 10
     assert row["finished_at"] == finished
     assert row["error_msg"] is None
+
+
+def test_upsert_work_item_history_and_query(db_conn):
+    area_path_id = _make_area_path(db_conn)
+    updates = [
+        {
+            "rev": 1,
+            "revisedBy": {"uniqueName": "alice@example.com"},
+            "revisedDate": "2026-07-01T10:00:00Z",
+            "fields": {"System.State": {"newValue": "New"}},
+        },
+        {
+            "rev": 2,
+            "revisedBy": {"uniqueName": "bob@example.com"},
+            "revisedDate": "2026-07-02T10:00:00Z",
+            "fields": {"System.State": {"oldValue": "New", "newValue": "Active"}},
+        },
+    ]
+
+    repo.upsert_work_item_history(db_conn, area_path_id, 42, updates)
+    db_conn.commit()
+
+    with db_conn.cursor(row_factory=repo.dict_row) as cur:
+        cur.execute(
+            "SELECT * FROM work_item_history WHERE work_item_id = %s ORDER BY rev", (42,)
+        )
+        rows = cur.fetchall()
+
+    assert len(rows) == 2
+    assert rows[0]["rev"] == 1
+    assert rows[0]["revised_by"] == "alice@example.com"
+    assert rows[0]["revised_date"] == datetime.datetime(2026, 7, 1, 10, 0, 0)
+    assert rows[0]["raw_json"]["fields"]["System.State"]["newValue"] == "New"
+    assert rows[1]["revised_by"] == "bob@example.com"
+
+
+def test_upsert_work_item_history_is_idempotent_by_rev(db_conn):
+    area_path_id = _make_area_path(db_conn)
+    update = {
+        "rev": 1,
+        "revisedBy": {"uniqueName": "alice@example.com"},
+        "revisedDate": "2026-07-01T10:00:00Z",
+        "fields": {"System.State": {"newValue": "New"}},
+    }
+
+    repo.upsert_work_item_history(db_conn, area_path_id, 42, [update])
+    db_conn.commit()
+
+    updated = dict(update, revisedBy={"uniqueName": "carol@example.com"})
+    repo.upsert_work_item_history(db_conn, area_path_id, 42, [updated])
+    db_conn.commit()
+
+    with db_conn.cursor() as cur:
+        cur.execute("SELECT COUNT(*) FROM work_item_history WHERE work_item_id = 42")
+        assert cur.fetchone()[0] == 1
+        cur.execute("SELECT revised_by FROM work_item_history WHERE work_item_id = 42 AND rev = 1")
+        assert cur.fetchone()[0] == "carol@example.com"
+
+
+def test_upsert_work_item_history_empty_list_is_noop(db_conn):
+    area_path_id = _make_area_path(db_conn)
+    repo.upsert_work_item_history(db_conn, area_path_id, 42, [])
+    db_conn.commit()
+
+    with db_conn.cursor() as cur:
+        cur.execute("SELECT COUNT(*) FROM work_item_history")
+        assert cur.fetchone()[0] == 0
+
+
+def test_history_loaded_at_roundtrip(db_conn):
+    area_path_id = _make_area_path(db_conn)
+    assert repo.get_history_loaded_at(db_conn, area_path_id) is None
+
+    when = datetime.datetime(2026, 7, 15, 11, 0, 0)
+    repo.set_history_loaded(db_conn, area_path_id, when)
+    db_conn.commit()
+
+    assert repo.get_history_loaded_at(db_conn, area_path_id) == when
