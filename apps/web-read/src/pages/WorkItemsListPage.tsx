@@ -13,6 +13,8 @@ import { fetchWorkItems, fetchAreaPaths } from "../services/apiReadClient";
 import type { WorkItem } from "../models/workItem";
 import type { AreaPath } from "../models/areaPath";
 
+type WorkItemRow = WorkItem & Record<string, unknown>;
+
 const PAGE_SIZE = 50;
 
 export default function WorkItemsListPage() {
@@ -98,7 +100,7 @@ export default function WorkItemsListPage() {
       {!loading && !error && items.length > 0 && (
         <>
           <Table
-            data={items as unknown as Record<string, unknown>[]}
+            data={items as WorkItemRow[]}
             idKey="id"
             density="balanced"
             dividers="rows"
@@ -111,8 +113,8 @@ export default function WorkItemsListPage() {
                 key: "state",
                 header: "State",
                 width: proportional(1),
-                renderCell: (item: Record<string, unknown>) => (
-                  <Badge label={(item.state as string | null) ?? "—"} />
+                renderCell: (item: WorkItemRow) => (
+                  <Badge label={item.state ?? "—"} />
                 ),
               },
               { key: "assigned_to", header: "Assigned To", width: proportional(1) },
