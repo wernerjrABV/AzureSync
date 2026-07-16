@@ -10,6 +10,9 @@ function item(overrides: Partial<FeatureTreeItem>): FeatureTreeItem {
     parent_id: null,
     start_date: null,
     target_date: null,
+    created_date: null,
+    activated_date: null,
+    closed_date: null,
     ...overrides,
   };
 }
@@ -92,5 +95,43 @@ describe("buildFeatureTree", () => {
     ]);
 
     expect(tree).toHaveLength(0);
+  });
+
+  test("effectiveDate falls back start_date -> activated_date -> created_date -> closed_date", () => {
+    const tree = buildFeatureTree([
+      item({ id: 1, work_item_type: "Solution", start_date: "2026-01-01T00:00:00", activated_date: "2020-01-01T00:00:00" }),
+      item({ id: 2, work_item_type: "Solution", activated_date: "2026-02-01T00:00:00", created_date: "2020-01-01T00:00:00" }),
+      item({ id: 3, work_item_type: "Solution", created_date: "2026-03-01T00:00:00", closed_date: "2020-01-01T00:00:00" }),
+      item({ id: 4, work_item_type: "Solution", closed_date: "2026-04-01T00:00:00" }),
+      item({ id: 5, work_item_type: "Solution" }),
+    ]);
+
+    const byId = new Map(tree.map((n) => [n.id, n]));
+    expect(byId.get(1)!.effectiveDate).toBe("2026-01-01T00:00:00");
+    expect(byId.get(2)!.effectiveDate).toBe("2026-02-01T00:00:00");
+    expect(byId.get(3)!.effectiveDate).toBe("2026-03-01T00:00:00");
+    expect(byId.get(4)!.effectiveDate).toBe("2026-04-01T00:00:00");
+    expect(byId.get(5)!.effectiveDate).toBeNull();
+  });
+
+  test("sorts children within a parent by effectiveDate, most recent first, undated last", () => {
+    const tree = buildFeatureTree([
+      item({ id: 1, work_item_type: "Epic" }),
+      item({ id: 2, title: "Oldest", work_item_type: "Feature", parent_id: 1, start_date: "2025-01-01T00:00:00" }),
+      item({ id: 3, title: "Newest", work_item_type: "Feature", parent_id: 1, start_date: "2026-06-01T00:00:00" }),
+      item({ id: 4, title: "Undated", work_item_type: "Feature", parent_id: 1 }),
+      item({ id: 5, title: "Middle", work_item_type: "Feature", parent_id: 1, start_date: "2025-12-01T00:00:00" }),
+    ]);
+
+    expect(tree[0].children.map((c) => c.title)).toEqual(["Newest", "Middle", "Oldest", "Undated"]);
+  });
+
+  test("sorts root-level nodes by effectiveDate, most recent first", () => {
+    const tree = buildFeatureTree([
+      item({ id: 1, title: "Older Solution", work_item_type: "Solution", start_date: "2025-01-01T00:00:00" }),
+      item({ id: 2, title: "Newer Solution", work_item_type: "Solution", start_date: "2026-01-01T00:00:00" }),
+    ]);
+
+    expect(tree.map((n) => n.title)).toEqual(["Newer Solution", "Older Solution"]);
   });
 });

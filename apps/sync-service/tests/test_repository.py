@@ -341,3 +341,37 @@ def test_upsert_work_items_persists_start_and_target_date(db_conn):
 
     assert start_date == datetime.datetime(2026, 1, 10, 0, 0, 0)
     assert target_date == datetime.datetime(2026, 2, 28, 0, 0, 0)
+
+
+def test_upsert_work_items_persists_created_activated_closed_date(db_conn):
+    area_path_id = _make_area_path(db_conn)
+    repo.upsert_work_items(
+        db_conn,
+        area_path_id,
+        [
+            {
+                "id": 1,
+                "title": "Feature A",
+                "work_item_type": "Feature",
+                "state": "Closed",
+                "assigned_to": None,
+                "changed_date": datetime.datetime(2026, 7, 1, 12, 0, 0),
+                "created_date": datetime.datetime(2025, 11, 1, 9, 0, 0),
+                "activated_date": datetime.datetime(2025, 12, 1, 9, 0, 0),
+                "closed_date": datetime.datetime(2026, 6, 15, 17, 30, 0),
+                "parent_id": None,
+                "raw_json": "{}",
+            }
+        ],
+    )
+    db_conn.commit()
+
+    with db_conn.cursor() as cur:
+        cur.execute(
+            "SELECT created_date, activated_date, closed_date FROM work_items WHERE id = 1"
+        )
+        created_date, activated_date, closed_date = cur.fetchone()
+
+    assert created_date == datetime.datetime(2025, 11, 1, 9, 0, 0)
+    assert activated_date == datetime.datetime(2025, 12, 1, 9, 0, 0)
+    assert closed_date == datetime.datetime(2026, 6, 15, 17, 30, 0)

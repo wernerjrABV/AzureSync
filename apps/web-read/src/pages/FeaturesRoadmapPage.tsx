@@ -12,6 +12,7 @@ import { TreeList, type TreeListItemData } from "@astryxdesign/core/TreeList";
 import { fetchAreaPaths, fetchFeaturesTree } from "../services/apiReadClient";
 import { buildFeatureTree, type FeatureTreeNode } from "../utils/buildFeatureTree";
 import { buildGanttMonths, featureCoversMonth, datedFeatures } from "../utils/ganttMonths";
+import { quarterKey, quarterLabel } from "../utils/quarter";
 import type { AreaPath } from "../models/areaPath";
 import type { FeatureTreeItem } from "../models/feature";
 
@@ -19,14 +20,41 @@ function formatDate(iso: string | null): string {
   return iso === null ? "—" : iso.slice(0, 10);
 }
 
-function toTreeItems(nodes: FeatureTreeNode[]): TreeListItemData[] {
-  return nodes.map((node) => ({
+function nodeToTreeItem(node: FeatureTreeNode): TreeListItemData {
+  return {
     id: String(node.id),
     label: node.title,
     description: `${node.workItemType} · ${formatDate(node.startDate)} → ${formatDate(node.targetDate)}`,
     isExpanded: node.workItemType === "Epic",
-    children: node.children.length > 0 ? toTreeItems(node.children) : undefined,
-  }));
+    children:
+      node.children.length > 0
+        ? toTreeItemsWithQuarterSeparators(node.children, String(node.id))
+        : undefined,
+  };
+}
+
+// Nodes are already sorted most-recent-first (buildFeatureTree). This walks
+// that order and inserts a non-interactive quarter-header row each time the
+// effectiveDate's quarter changes from the previous sibling's.
+function toTreeItemsWithQuarterSeparators(
+  nodes: FeatureTreeNode[],
+  parentId: string
+): TreeListItemData[] {
+  const result: TreeListItemData[] = [];
+  let lastQuarter: string | null = null;
+  for (const node of nodes) {
+    const currentQuarter = node.effectiveDate ? quarterKey(node.effectiveDate) : "undated";
+    if (currentQuarter !== lastQuarter) {
+      result.push({
+        id: `quarter-${parentId}-${currentQuarter}`,
+        label: currentQuarter === "undated" ? "No date" : quarterLabel(currentQuarter),
+        isDisabled: true,
+      });
+      lastQuarter = currentQuarter;
+    }
+    result.push(nodeToTreeItem(node));
+  }
+  return result;
 }
 
 type GanttRow = { id: number; title: string; coveredMonthKeys: Set<string> } & Record<
@@ -116,7 +144,7 @@ export default function FeaturesRoadmapPage() {
 
       {areaPathId !== undefined && !loading && !error && tree.length > 0 && (
         <>
-          <TreeList items={toTreeItems(tree)} density="balanced" />
+          <TreeList items={toTreeItemsWithQuarterSeparators(tree, "root")} density="balanced" />
 
           {excludedCount > 0 && (
             <Text>

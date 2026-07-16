@@ -283,3 +283,62 @@ def test_get_work_items_batch_handles_missing_scheduling_dates(mock_post):
     item = items[0]
     assert item["start_date"] is None
     assert item["target_date"] is None
+
+
+@patch("app.ado_client.requests.post")
+def test_get_work_items_batch_extracts_created_activated_closed_dates(mock_post):
+    mock_post.return_value = _response(
+        200,
+        {
+            "value": [
+                {
+                    "id": 1,
+                    "fields": {
+                        "System.Title": "Feature A",
+                        "System.WorkItemType": "Feature",
+                        "System.State": "Closed",
+                        "System.ChangedDate": "2026-07-01T12:00:00Z",
+                        "System.CreatedDate": "2025-11-01T09:00:00Z",
+                        "Microsoft.VSTS.Common.ActivatedDate": "2025-12-01T09:00:00Z",
+                        "Microsoft.VSTS.Common.ClosedDate": "2026-06-15T17:30:00Z",
+                    },
+                }
+            ]
+        },
+    )
+
+    client = AdoClient("org", "proj", pat="fake-pat")
+    items = client.get_work_items_batch([1])
+
+    item = items[0]
+    assert item["created_date"] == datetime.datetime(2025, 11, 1, 9, 0, 0)
+    assert item["activated_date"] == datetime.datetime(2025, 12, 1, 9, 0, 0)
+    assert item["closed_date"] == datetime.datetime(2026, 6, 15, 17, 30, 0)
+
+
+@patch("app.ado_client.requests.post")
+def test_get_work_items_batch_handles_missing_created_activated_closed_dates(mock_post):
+    mock_post.return_value = _response(
+        200,
+        {
+            "value": [
+                {
+                    "id": 2,
+                    "fields": {
+                        "System.Title": "Bug B",
+                        "System.WorkItemType": "Bug",
+                        "System.State": "Active",
+                        "System.ChangedDate": "2026-07-01T12:00:00Z",
+                    },
+                }
+            ]
+        },
+    )
+
+    client = AdoClient("org", "proj", pat="fake-pat")
+    items = client.get_work_items_batch([2])
+
+    item = items[0]
+    assert item["created_date"] is None
+    assert item["activated_date"] is None
+    assert item["closed_date"] is None

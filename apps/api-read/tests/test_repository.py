@@ -157,16 +157,20 @@ def test_list_work_items_empty_search_returns_all(db_conn):
 def _seed_feature_tree_item(
     conn, area_path_id, item_id, title, work_item_type, parent_id=None,
     start_date=None, target_date=None, state="Active",
+    created_date=None, activated_date=None, closed_date=None,
 ):
     with conn.cursor() as cur:
         cur.execute(
             """
             INSERT INTO work_items
                 (id, area_path_id, title, work_item_type, state, parent_id,
-                 start_date, target_date, raw_json)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, '{}')
+                 start_date, target_date, created_date, activated_date, closed_date, raw_json)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, '{}')
             """,
-            (item_id, area_path_id, title, work_item_type, state, parent_id, start_date, target_date),
+            (
+                item_id, area_path_id, title, work_item_type, state, parent_id,
+                start_date, target_date, created_date, activated_date, closed_date,
+            ),
         )
     conn.commit()
 
@@ -206,6 +210,22 @@ def test_list_features_tree_includes_dates_and_parent(db_conn):
     assert rows[0]["parent_id"] is None
     assert rows[0]["start_date"].isoformat() == "2026-01-10T00:00:00"
     assert rows[0]["target_date"].isoformat() == "2026-02-28T00:00:00"
+
+
+def test_list_features_tree_includes_created_activated_closed_dates(db_conn):
+    ap1 = _seed_area_path(db_conn)
+    _seed_feature_tree_item(
+        db_conn, ap1, 1, "Feat A", "Feature", state="Closed",
+        created_date="2025-11-01T09:00:00",
+        activated_date="2025-12-01T09:00:00",
+        closed_date="2026-06-15T17:30:00",
+    )
+
+    rows = repo.list_features_tree(db_conn, area_path_id=ap1)
+
+    assert rows[0]["created_date"].isoformat() == "2025-11-01T09:00:00"
+    assert rows[0]["activated_date"].isoformat() == "2025-12-01T09:00:00"
+    assert rows[0]["closed_date"].isoformat() == "2026-06-15T17:30:00"
 
 
 def test_list_features_tree_excludes_cancelled_and_removed(db_conn):

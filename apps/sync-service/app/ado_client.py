@@ -150,6 +150,13 @@ class AdoClient:
         target_date = AdoClient._parse_ado_date(
             fields.get("Microsoft.VSTS.Scheduling.TargetDate")
         )
+        created_date = AdoClient._parse_ado_date(fields.get("System.CreatedDate"))
+        activated_date = AdoClient._parse_ado_date(
+            fields.get("Microsoft.VSTS.Common.ActivatedDate")
+        )
+        closed_date = AdoClient._parse_ado_date(
+            fields.get("Microsoft.VSTS.Common.ClosedDate")
+        )
 
         parent_id = fields.get("System.Parent")
         if parent_id is None:
@@ -167,6 +174,9 @@ class AdoClient:
             "changed_date": changed_date,
             "start_date": start_date,
             "target_date": target_date,
+            "created_date": created_date,
+            "activated_date": activated_date,
+            "closed_date": closed_date,
             "parent_id": parent_id,
             "raw_json": json.dumps(raw),
         }

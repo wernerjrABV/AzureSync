@@ -126,8 +126,9 @@ def upsert_work_items(conn: psycopg.Connection, area_path_id: int, items: list[d
                 """
                 INSERT INTO work_items
                     (id, area_path_id, title, work_item_type, state, assigned_to, changed_date,
-                     start_date, target_date, parent_id, raw_json, synced_at)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now())
+                     start_date, target_date, created_date, activated_date, closed_date,
+                     parent_id, raw_json, synced_at)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now())
                 ON CONFLICT (id) DO UPDATE SET
                     area_path_id = EXCLUDED.area_path_id,
                     title = EXCLUDED.title,
@@ -137,6 +138,9 @@ def upsert_work_items(conn: psycopg.Connection, area_path_id: int, items: list[d
                     changed_date = EXCLUDED.changed_date,
                     start_date = EXCLUDED.start_date,
                     target_date = EXCLUDED.target_date,
+                    created_date = EXCLUDED.created_date,
+                    activated_date = EXCLUDED.activated_date,
+                    closed_date = EXCLUDED.closed_date,
                     parent_id = EXCLUDED.parent_id,
                     raw_json = EXCLUDED.raw_json,
                     synced_at = now()
@@ -151,6 +155,9 @@ def upsert_work_items(conn: psycopg.Connection, area_path_id: int, items: list[d
                     item["changed_date"],
                     item.get("start_date"),
                     item.get("target_date"),
+                    item.get("created_date"),
+                    item.get("activated_date"),
+                    item.get("closed_date"),
                     item.get("parent_id"),
                     item["raw_json"],
                 ),

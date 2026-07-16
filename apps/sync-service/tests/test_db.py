@@ -58,3 +58,16 @@ def test_work_items_has_start_and_target_date_columns(db_conn):
         )
         columns = {row[0] for row in cur.fetchall()}
     assert columns == {"start_date", "target_date"}
+
+
+def test_work_items_has_created_activated_closed_date_columns(db_conn):
+    with db_conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT column_name FROM information_schema.columns
+            WHERE table_name = 'work_items'
+              AND column_name IN ('created_date', 'activated_date', 'closed_date')
+            """
+        )
+        columns = {row[0] for row in cur.fetchall()}
+    assert columns == {"created_date", "activated_date", "closed_date"}

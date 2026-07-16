@@ -10,6 +10,9 @@ function item(overrides: Partial<FeatureTreeItem>): FeatureTreeItem {
     parent_id: null,
     start_date: null,
     target_date: null,
+    created_date: null,
+    activated_date: null,
+    closed_date: null,
     ...overrides,
   };
 }

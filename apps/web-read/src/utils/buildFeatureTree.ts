@@ -6,6 +6,11 @@ export interface FeatureTreeNode {
   workItemType: string;
   startDate: string | null;
   targetDate: string | null;
+  // The node's own date used for ordering — start_date, falling back to
+  // activated_date, then created_date, then closed_date. Unlike
+  // startDate/targetDate (which roll up from descendants), this is never
+  // rolled up: it reflects when this specific item itself began.
+  effectiveDate: string | null;
   children: FeatureTreeNode[];
 }
 
@@ -29,6 +34,25 @@ function rollUp(node: FeatureTreeNode): void {
   }
 }
 
+function computeEffectiveDate(item: FeatureTreeItem): string | null {
+  return item.start_date ?? item.activated_date ?? item.created_date ?? item.closed_date;
+}
+
+// Most recent effectiveDate first; items with no date at all sort last.
+function byEffectiveDateDescending(a: FeatureTreeNode, b: FeatureTreeNode): number {
+  if (a.effectiveDate === null && b.effectiveDate === null) return 0;
+  if (a.effectiveDate === null) return 1;
+  if (b.effectiveDate === null) return -1;
+  return a.effectiveDate < b.effectiveDate ? 1 : a.effectiveDate > b.effectiveDate ? -1 : 0;
+}
+
+function sortByEffectiveDate(node: FeatureTreeNode): void {
+  node.children.sort(byEffectiveDateDescending);
+  for (const child of node.children) {
+    sortByEffectiveDate(child);
+  }
+}
+
 export function buildFeatureTree(items: FeatureTreeItem[]): FeatureTreeNode[] {
   const nodesById = new Map<number, FeatureTreeNode>();
   for (const item of items) {
@@ -38,6 +62,7 @@ export function buildFeatureTree(items: FeatureTreeItem[]): FeatureTreeNode[] {
       workItemType: item.work_item_type ?? "Unknown",
       startDate: item.start_date,
       targetDate: item.target_date,
+      effectiveDate: computeEffectiveDate(item),
       children: [],
     });
   }
@@ -57,7 +82,9 @@ export function buildFeatureTree(items: FeatureTreeItem[]): FeatureTreeNode[] {
 
   for (const root of roots) {
     rollUp(root);
+    sortByEffectiveDate(root);
   }
+  roots.sort(byEffectiveDateDescending);
 
   return roots;
 }
