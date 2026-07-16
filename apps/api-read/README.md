@@ -34,7 +34,7 @@ Server starts on `http://127.0.0.1:5001` by default (override with
 | `DATABASE_URL` | yes | — | Postgres connection string (same DB as sync-service) |
 | `API_READ_HOST` | no | `127.0.0.1` | Bind host |
 | `API_READ_PORT` | no | `5001` | Bind port |
-| `API_READ_CORS_ORIGIN` | no | `http://127.0.0.1:5173` | Origin allowed via `Access-Control-Allow-Origin` (should match `apps/web-read`'s dev server) |
+| `API_READ_CORS_ORIGIN` | no | `http://127.0.0.1:5173,http://localhost:5173` | Comma-separated list of origins allowed via `Access-Control-Allow-Origin` (should include whatever origin `apps/web-read`'s dev server is actually opened from — `localhost` and `127.0.0.1` are treated as different origins by browsers) |
 | `TEST_DATABASE_URL` | no (tests only) | — | Separate Postgres DB for tests; tests are skipped if unset |
 
 ## Endpoints

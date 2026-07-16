@@ -16,5 +16,8 @@ def get_port() -> int:
     return int(os.environ.get("API_READ_PORT", "5001"))
 
 
-def get_cors_allowed_origin() -> str:
-    return os.environ.get("API_READ_CORS_ORIGIN", "http://127.0.0.1:5173")
+def get_cors_allowed_origins() -> list[str]:
+    value = os.environ.get(
+        "API_READ_CORS_ORIGIN", "http://127.0.0.1:5173,http://localhost:5173"
+    )
+    return [origin.strip() for origin in value.split(",") if origin.strip()]
