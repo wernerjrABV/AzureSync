@@ -1,7 +1,19 @@
 import { useEffect, useState } from "react";
+import { Card } from "@astryxdesign/core/Layout";
+import { HStack } from "@astryxdesign/core/Layout";
+import { Selector } from "@astryxdesign/core/Selector";
+import { TextInput } from "@astryxdesign/core/TextInput";
+import { Table, proportional, pixel } from "@astryxdesign/core/Table";
+import { Pagination } from "@astryxdesign/core/Pagination";
+import { Banner } from "@astryxdesign/core/Banner";
+import { EmptyState } from "@astryxdesign/core/EmptyState";
+import { Spinner } from "@astryxdesign/core/Spinner";
+import { Badge } from "@astryxdesign/core/Badge";
 import { fetchWorkItems, fetchAreaPaths } from "../services/apiReadClient";
 import type { WorkItem } from "../models/workItem";
 import type { AreaPath } from "../models/areaPath";
+
+type WorkItemRow = WorkItem & Record<string, unknown>;
 
 const PAGE_SIZE = 50;
 
@@ -40,91 +52,85 @@ export default function WorkItemsListPage() {
       .finally(() => setLoading(false));
   }, [areaPathId, workItemType, page]);
 
-  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
-
   return (
-    <div>
-      <h1>Work Items</h1>
+    <Card>
+      <HStack gap={4} align="end" wrap="wrap">
+        <Selector
+          label="Area path"
+          hasSearch
+          hasClear
+          value={areaPathId !== undefined ? String(areaPathId) : null}
+          onChange={(value) => {
+            setPage(1);
+            setAreaPathId(value ? Number(value) : undefined);
+          }}
+          options={areaPaths.map((ap) => ({
+            value: String(ap.id),
+            label: ap.area_path,
+          }))}
+          placeholder="All"
+          width={280}
+        />
+        <TextInput
+          label="Type"
+          hasClear
+          value={workItemType}
+          onChange={(value) => {
+            setPage(1);
+            setWorkItemType(value);
+          }}
+          placeholder="e.g. Bug"
+          width={200}
+        />
+      </HStack>
 
-      <div>
-        <label>
-          Area path:{" "}
-          <select
-            value={areaPathId ?? ""}
-            onChange={(e) => {
-              setPage(1);
-              setAreaPathId(e.target.value ? Number(e.target.value) : undefined);
-            }}
-          >
-            <option value="">All</option>
-            {areaPaths.map((ap) => (
-              <option key={ap.id} value={ap.id}>
-                {ap.area_path}
-              </option>
-            ))}
-          </select>
-        </label>
-        {"  "}
-        <label>
-          Type:{" "}
-          <input
-            value={workItemType}
-            onChange={(e) => {
-              setPage(1);
-              setWorkItemType(e.target.value);
-            }}
-            placeholder="e.g. Bug"
-          />
-        </label>
-      </div>
+      {error && (
+        <Banner status="error" title="Error loading work items" description={error} />
+      )}
 
-      {error && <p role="alert">Error loading work items: {error}</p>}
+      {loading && !error && <Spinner label="Loading work items" />}
 
-      {loading && !error && <p>Loading...</p>}
-
-      {!loading && !error && items.length === 0 && <p>No work items found.</p>}
+      {!loading && !error && items.length === 0 && (
+        <EmptyState
+          title="No work items found"
+          description="Try adjusting the area path or type filter."
+        />
+      )}
 
       {!loading && !error && items.length > 0 && (
         <>
-          <table>
-            <thead>
-              <tr>
-                <th>ID</th>
-                <th>Title</th>
-                <th>Type</th>
-                <th>State</th>
-                <th>Assigned To</th>
-                <th>Changed Date</th>
-              </tr>
-            </thead>
-            <tbody>
-              {items.map((item) => (
-                <tr key={item.id}>
-                  <td>{item.id}</td>
-                  <td>{item.title}</td>
-                  <td>{item.work_item_type}</td>
-                  <td>{item.state}</td>
-                  <td>{item.assigned_to}</td>
-                  <td>{item.changed_date}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <Table
+            data={items as WorkItemRow[]}
+            idKey="id"
+            density="balanced"
+            dividers="rows"
+            hasHover
+            columns={[
+              { key: "id", header: "ID", width: pixel(80) },
+              { key: "title", header: "Title", width: proportional(3) },
+              { key: "work_item_type", header: "Type", width: proportional(1) },
+              {
+                key: "state",
+                header: "State",
+                width: proportional(1),
+                renderCell: (item: WorkItemRow) => (
+                  <Badge label={item.state ?? "—"} />
+                ),
+              },
+              { key: "assigned_to", header: "Assigned To", width: proportional(1) },
+              { key: "changed_date", header: "Changed Date", width: proportional(1) },
+            ]}
+          />
 
-          <div>
-            <button disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
-              Previous
-            </button>
-            <span>
-              {" "}
-              Page {page} of {totalPages} ({total} total){" "}
-            </span>
-            <button disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}>
-              Next
-            </button>
-          </div>
+          <Pagination
+            variant="compact"
+            page={page}
+            onChange={setPage}
+            totalItems={total}
+            pageSize={PAGE_SIZE}
+          />
         </>
       )}
-    </div>
+    </Card>
   );
 }
