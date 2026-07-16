@@ -28,13 +28,15 @@ def list_area_paths(conn: psycopg.Connection) -> list[dict]:
 def list_work_items(
     conn: psycopg.Connection,
     *,
-    area_path_id: int | None = None,
-    work_item_type: str | None = None,
+    area_path_id: int | None,
+    search: str | None = None,
     page: int = 1,
     page_size: int = 50,
     order_by: str = "changed_date",
     order_dir: str = "desc",
 ) -> tuple[list[dict], int]:
+    if area_path_id is None:
+        raise InvalidQueryParam("area_path_id is required")
     if order_by not in _ORDER_BY_COLUMNS:
         raise InvalidQueryParam(f"invalid order_by: {order_by}")
     if order_dir not in _ORDER_DIRS:
@@ -44,15 +46,19 @@ def list_work_items(
     if page_size < 1 or page_size > 200:
         raise InvalidQueryParam("page_size must be between 1 and 200")
 
-    where_clauses = []
-    params: list = []
-    if area_path_id is not None:
-        where_clauses.append("area_path_id = %s")
-        params.append(area_path_id)
-    if work_item_type is not None:
-        where_clauses.append("work_item_type = %s")
-        params.append(work_item_type)
-    where_sql = f"WHERE {' AND '.join(where_clauses)}" if where_clauses else ""
+    where_clauses = ["area_path_id = %s"]
+    params: list = [area_path_id]
+
+    search = (search or "").strip()
+    if search:
+        pattern = f"%{search}%"
+        where_clauses.append(
+            "(id::text ILIKE %s OR title ILIKE %s OR work_item_type ILIKE %s "
+            "OR state ILIKE %s OR assigned_to ILIKE %s)"
+        )
+        params.extend([pattern, pattern, pattern, pattern, pattern])
+
+    where_sql = f"WHERE {' AND '.join(where_clauses)}"
 
     with conn.cursor(row_factory=dict_row) as cur:
         cur.execute(f"SELECT COUNT(*) AS total FROM work_items {where_sql}", params)
