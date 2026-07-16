@@ -19,6 +19,12 @@ def test_health(client):
     assert response.get_json() == {"status": "ok"}
 
 
+def test_health_includes_cors_header(client):
+    response = client.get("/health")
+
+    assert response.headers["Access-Control-Allow-Origin"] == "http://127.0.0.1:5173"
+
+
 def test_list_area_paths(client, db_conn):
     with db_conn.cursor() as cur:
         cur.execute(
