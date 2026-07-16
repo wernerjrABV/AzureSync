@@ -1,11 +1,10 @@
 # shared-contracts
 
-**Status:** placeholder — not yet in use.
+Documentation-level contracts shared between `apps/api-read` (writer of
+the HTTP contract) and `apps/web-read` (consumer). Not a built/published
+package — each side manually mirrors these shapes in its own language
+(Python dict shapes in api-read, TypeScript interfaces in web-read).
 
-Will hold DTOs, schemas, and event/type contracts shared between
-`apps/sync-service` (writer) and future read-side apps (`apps/api-read`,
-`apps/web-read`), so the read side never has to reverse-engineer the
-database schema directly.
-
-Populated when `apps/api-read` is scaffolded (see
-`docs/architecture/monorepo-architecture.md`).
+- `work-item-listing.md` — pagination/filter/sort query contract and
+  response envelope for `GET /api/work-items`.
+- `schemas/work-item.json` — JSON Schema for the `WorkItem` DTO.

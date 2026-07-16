@@ -61,6 +61,10 @@ CREATE TABLE IF NOT EXISTS work_item_history (
 ALTER TABLE area_paths ADD COLUMN IF NOT EXISTS last_error_msg TEXT;
 ALTER TABLE area_paths ADD COLUMN IF NOT EXISTS history_loaded_at TIMESTAMP;
 ALTER TABLE work_items ADD COLUMN IF NOT EXISTS parent_id INTEGER;
+
+CREATE INDEX IF NOT EXISTS idx_work_items_area_path_id ON work_items (area_path_id);
+CREATE INDEX IF NOT EXISTS idx_work_items_area_path_changed_date ON work_items (area_path_id, changed_date DESC);
+CREATE INDEX IF NOT EXISTS idx_work_items_type ON work_items (work_item_type) WHERE work_item_type IS NOT NULL;
 """
 
 

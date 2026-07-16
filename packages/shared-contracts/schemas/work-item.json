@@ -1,0 +1,16 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "WorkItem",
+  "type": "object",
+  "properties": {
+    "id": { "type": "integer" },
+    "area_path_id": { "type": "integer" },
+    "title": { "type": ["string", "null"] },
+    "work_item_type": { "type": ["string", "null"] },
+    "state": { "type": ["string", "null"] },
+    "assigned_to": { "type": ["string", "null"] },
+    "changed_date": { "type": ["string", "null"], "format": "date-time" },
+    "parent_id": { "type": ["integer", "null"] }
+  },
+  "required": ["id", "area_path_id"]
+}

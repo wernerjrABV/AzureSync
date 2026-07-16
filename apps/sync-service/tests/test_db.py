@@ -34,3 +34,15 @@ def test_init_schema_adds_history_loaded_at_column(db_conn):
 
     assert row is not None
     assert row[0] == "timestamp without time zone"
+
+
+def test_init_schema_creates_expected_indexes(db_conn):
+    with db_conn.cursor() as cur:
+        cur.execute(
+            "SELECT indexname FROM pg_indexes WHERE tablename = 'work_items'"
+        )
+        index_names = {row[0] for row in cur.fetchall()}
+
+    assert "idx_work_items_area_path_id" in index_names
+    assert "idx_work_items_area_path_changed_date" in index_names
+    assert "idx_work_items_type" in index_names

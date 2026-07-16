@@ -1,0 +1,75 @@
+"""Read-only query layer for apps/api-read.
+
+This module must contain only SELECT queries. apps/sync-service is the only
+writer to this database (see docs/adr/0002-single-writer.md and
+docs/adr/0003-read-only-api.md). This constraint is enforced mechanically by
+tests/test_readonly_guardrail.py.
+"""
+
+import psycopg
+from psycopg.rows import dict_row
+
+_ORDER_BY_COLUMNS = {"changed_date", "id", "title"}
+_ORDER_DIRS = {"asc", "desc"}
+
+
+class InvalidQueryParam(ValueError):
+    pass
+
+
+def list_area_paths(conn: psycopg.Connection) -> list[dict]:
+    with conn.cursor(row_factory=dict_row) as cur:
+        cur.execute(
+            "SELECT id, organization, project, area_path FROM area_paths ORDER BY id"
+        )
+        return cur.fetchall()
+
+
+def list_work_items(
+    conn: psycopg.Connection,
+    *,
+    area_path_id: int | None = None,
+    work_item_type: str | None = None,
+    page: int = 1,
+    page_size: int = 50,
+    order_by: str = "changed_date",
+    order_dir: str = "desc",
+) -> tuple[list[dict], int]:
+    if order_by not in _ORDER_BY_COLUMNS:
+        raise InvalidQueryParam(f"invalid order_by: {order_by}")
+    if order_dir not in _ORDER_DIRS:
+        raise InvalidQueryParam(f"invalid order_dir: {order_dir}")
+    if page < 1:
+        raise InvalidQueryParam("page must be >= 1")
+    if page_size < 1 or page_size > 200:
+        raise InvalidQueryParam("page_size must be between 1 and 200")
+
+    where_clauses = []
+    params: list = []
+    if area_path_id is not None:
+        where_clauses.append("area_path_id = %s")
+        params.append(area_path_id)
+    if work_item_type is not None:
+        where_clauses.append("work_item_type = %s")
+        params.append(work_item_type)
+    where_sql = f"WHERE {' AND '.join(where_clauses)}" if where_clauses else ""
+
+    with conn.cursor(row_factory=dict_row) as cur:
+        cur.execute(f"SELECT COUNT(*) AS total FROM work_items {where_sql}", params)
+        total = cur.fetchone()["total"]
+
+        offset = (page - 1) * page_size
+        cur.execute(
+            f"""
+            SELECT id, area_path_id, title, work_item_type, state, assigned_to,
+                   changed_date, parent_id
+            FROM work_items
+            {where_sql}
+            ORDER BY {order_by} {order_dir}
+            LIMIT %s OFFSET %s
+            """,
+            params + [page_size, offset],
+        )
+        rows = cur.fetchall()
+
+    return rows, total

@@ -32,16 +32,36 @@ python run.py
 Open http://127.0.0.1:5000. See `apps/sync-service/README.md` for env vars
 and test setup.
 
+## Running the read path
+
+The read path consists of two apps: `apps/api-read` (read-only backend) and
+`apps/web-read` (React frontend).
+
+**Via PowerShell (Windows):**
+
+```powershell
+# Terminal 1: Start the read API
+.\scripts\run-api-read.ps1
+
+# Terminal 2: Start the web frontend
+.\scripts\run-web-read.ps1
+```
+
+Open http://127.0.0.1:5173 (web-read default port). See `apps/api-read/README.md`
+and `apps/web-read/README.md` for env vars and configuration. Full architecture
+at `docs/architecture/read-path-architecture.md`.
+
 ## Roadmap
 
-Today: `apps/sync-service` is the only app, and the only database writer.
+**Complete:**
+- `apps/sync-service` — the only database writer (syncs Azure DevOps to PostgreSQL).
+- `apps/api-read` — read-only backend querying the same database.
+- `apps/web-read` — frontend listing data via `apps/api-read`.
+- Database index review for the read-heavy access pattern.
 
-Next:
-1. `apps/api-read` — read-only backend querying the same database.
-2. `apps/web-read` — frontend listing data via `apps/api-read`.
-3. Database index review for the new read-heavy access pattern.
+**Next:**
 
-Each of the above will land as its own design spec + implementation plan
+Each phase lands as its own design spec + implementation plan
 (see `docs/superpowers/specs/` and `docs/superpowers/plans/`) — this repo is
 built incrementally, not as a big-bang rewrite.
 
