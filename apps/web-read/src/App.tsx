@@ -1,3 +1,5 @@
+import { Theme } from "@astryxdesign/core/theme";
+import { neutralTheme } from "@astryxdesign/theme-neutral";
 import { AppShell } from "@astryxdesign/core/AppShell";
 import { TopNav } from "@astryxdesign/core/TopNav";
 import { TopNavHeading } from "@astryxdesign/core/TopNav";
@@ -11,25 +13,27 @@ const INFO_MESSAGE = "";
 
 export default function App() {
   return (
-    <AppShell
-      variant="elevated"
-      contentPadding={4}
-      topNav={
-        <TopNav
-          label="Main navigation"
-          heading={<TopNavHeading heading="Work Items" />}
-        />
-      }
-      sideNav={
-        <SideNav header={<SideNavHeading heading="Work Items" />}>
-          <SideNavItem label="Work Items" isSelected />
-        </SideNav>
-      }
-      banner={
-        INFO_MESSAGE ? <Banner status="info" title={INFO_MESSAGE} /> : undefined
-      }
-    >
-      <WorkItemsListPage />
-    </AppShell>
+    <Theme theme={neutralTheme}>
+      <AppShell
+        variant="elevated"
+        contentPadding={4}
+        topNav={
+          <TopNav
+            label="Main navigation"
+            heading={<TopNavHeading heading="Work Items" />}
+          />
+        }
+        sideNav={
+          <SideNav header={<SideNavHeading heading="Work Items" />}>
+            <SideNavItem label="Work Items" isSelected />
+          </SideNav>
+        }
+        banner={
+          INFO_MESSAGE ? <Banner status="info" title={INFO_MESSAGE} /> : undefined
+        }
+      >
+        <WorkItemsListPage />
+      </AppShell>
+    </Theme>
   );
 }
