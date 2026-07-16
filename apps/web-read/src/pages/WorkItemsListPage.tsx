@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Card } from "@astryxdesign/core/Layout";
 import { HStack } from "@astryxdesign/core/Layout";
 import { Selector } from "@astryxdesign/core/Selector";
@@ -16,6 +16,8 @@ import type { AreaPath } from "../models/areaPath";
 type WorkItemRow = WorkItem & Record<string, unknown>;
 
 const PAGE_SIZE = 50;
+const SEARCH_DEBOUNCE_MS = 350;
+const SEARCH_MIN_LENGTH = 3;
 
 export default function WorkItemsListPage() {
   const [areaPaths, setAreaPaths] = useState<AreaPath[]>([]);
@@ -24,9 +26,22 @@ export default function WorkItemsListPage() {
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [areaPathId, setAreaPathId] = useState<number | undefined>(undefined);
+  const [searchInput, setSearchInput] = useState<string>("");
   const [search, setSearch] = useState<string>("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const latestRequestId = useRef(0);
+
+  useEffect(() => {
+    const handle = setTimeout(() => {
+      if (searchInput.length === 0 || searchInput.length >= SEARCH_MIN_LENGTH) {
+        setPage(1);
+        setSearch(searchInput);
+      }
+    }, SEARCH_DEBOUNCE_MS);
+
+    return () => clearTimeout(handle);
+  }, [searchInput]);
 
   useEffect(() => {
     fetchAreaPaths()
@@ -46,6 +61,7 @@ export default function WorkItemsListPage() {
     if (areaPathId === undefined) {
       return;
     }
+    const requestId = ++latestRequestId.current;
     setLoading(true);
     setError(null);
     fetchWorkItems({
@@ -55,11 +71,22 @@ export default function WorkItemsListPage() {
       pageSize: PAGE_SIZE,
     })
       .then((response) => {
+        if (requestId !== latestRequestId.current) {
+          return;
+        }
         setItems(response.data);
         setTotal(response.pagination.total);
       })
-      .catch((err: Error) => setError(err.message))
-      .finally(() => setLoading(false));
+      .catch((err: Error) => {
+        if (requestId === latestRequestId.current) {
+          setError(err.message);
+        }
+      })
+      .finally(() => {
+        if (requestId === latestRequestId.current) {
+          setLoading(false);
+        }
+      });
   }, [areaPathId, search, page]);
 
   return (
@@ -82,12 +109,9 @@ export default function WorkItemsListPage() {
         <TextInput
           label="Search"
           hasClear
-          value={search}
-          onChange={(value) => {
-            setPage(1);
-            setSearch(value);
-          }}
-          placeholder="Search by id, title, type, state, assigned to"
+          value={searchInput}
+          onChange={setSearchInput}
+          placeholder="Search by id, title, type, state, assigned to (min. 3 characters)"
           width={320}
         />
       </HStack>
