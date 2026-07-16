@@ -48,7 +48,9 @@ export function buildFeatureTree(items: FeatureTreeItem[]): FeatureTreeNode[] {
     const parent = item.parent_id !== null ? nodesById.get(item.parent_id) : undefined;
     if (parent) {
       parent.children.push(node);
-    } else {
+    } else if (node.workItemType !== "Feature") {
+      // A Feature with no parent has nothing to roll up to and is dropped
+      // from the tree rather than shown as a meaningless top-level entry.
       roots.push(node);
     }
   }
