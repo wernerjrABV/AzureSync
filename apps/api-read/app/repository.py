@@ -89,10 +89,52 @@ def list_features_tree(conn: psycopg.Connection, *, area_path_id: int) -> list[d
         cur.execute(
             """
             SELECT id, title, work_item_type, parent_id, start_date, target_date
-            FROM work_items
+            FROM work_items AS w
             WHERE area_path_id = %s
               AND work_item_type IN ('Feature', 'Epic', 'Solution')
               AND (state IS NULL OR state NOT IN ('Cancelled', 'Canceled', 'Removed'))
+              AND NOT (
+                -- Closed Solutions with no linked Feature (direct or via an Epic)
+                work_item_type = 'Solution'
+                AND state = 'Closed'
+                AND NOT EXISTS (
+                    SELECT 1 FROM work_items AS f
+                    WHERE f.area_path_id = w.area_path_id
+                      AND f.work_item_type = 'Feature'
+                      AND (f.state IS NULL OR f.state NOT IN ('Cancelled', 'Canceled', 'Removed'))
+                      AND (
+                        f.parent_id = w.id
+                        OR f.parent_id IN (
+                            SELECT e.id FROM work_items AS e
+                            WHERE e.parent_id = w.id AND e.work_item_type = 'Epic'
+                        )
+                      )
+                )
+              )
+              AND NOT (
+                -- Epics whose parent Solution is excluded by the rule above would
+                -- otherwise be orphaned as a meaningless top-level node.
+                work_item_type = 'Epic'
+                AND EXISTS (
+                    SELECT 1 FROM work_items AS sol
+                    WHERE sol.id = w.parent_id
+                      AND sol.work_item_type = 'Solution'
+                      AND sol.state = 'Closed'
+                      AND NOT EXISTS (
+                          SELECT 1 FROM work_items AS f
+                          WHERE f.area_path_id = sol.area_path_id
+                            AND f.work_item_type = 'Feature'
+                            AND (f.state IS NULL OR f.state NOT IN ('Cancelled', 'Canceled', 'Removed'))
+                            AND (
+                              f.parent_id = sol.id
+                              OR f.parent_id IN (
+                                  SELECT e.id FROM work_items AS e
+                                  WHERE e.parent_id = sol.id AND e.work_item_type = 'Epic'
+                              )
+                            )
+                      )
+                )
+              )
             ORDER BY id
             """,
             (area_path_id,),
