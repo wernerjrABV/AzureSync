@@ -1,10 +1,19 @@
 from flask import Flask, jsonify, request
 
 from app import db, repository as repo
+from app.config import get_cors_allowed_origins
 
 
 def create_app(conn_factory=db.get_connection) -> Flask:
     app = Flask(__name__)
+
+    @app.after_request
+    def add_cors_headers(response):
+        origin = request.headers.get("Origin")
+        if origin in get_cors_allowed_origins():
+            response.headers["Access-Control-Allow-Origin"] = origin
+            response.headers["Access-Control-Allow-Methods"] = "GET"
+        return response
 
     @app.route("/health", methods=["GET"])
     def health():
