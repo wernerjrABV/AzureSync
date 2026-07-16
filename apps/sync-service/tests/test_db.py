@@ -46,3 +46,15 @@ def test_init_schema_creates_expected_indexes(db_conn):
     assert "idx_work_items_area_path_id" in index_names
     assert "idx_work_items_area_path_changed_date" in index_names
     assert "idx_work_items_type" in index_names
+
+
+def test_work_items_has_start_and_target_date_columns(db_conn):
+    with db_conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT column_name FROM information_schema.columns
+            WHERE table_name = 'work_items' AND column_name IN ('start_date', 'target_date')
+            """
+        )
+        columns = {row[0] for row in cur.fetchall()}
+    assert columns == {"start_date", "target_date"}

@@ -311,3 +311,33 @@ def test_history_loaded_at_roundtrip(db_conn):
     db_conn.commit()
 
     assert repo.get_history_loaded_at(db_conn, area_path_id) == when
+
+
+def test_upsert_work_items_persists_start_and_target_date(db_conn):
+    area_path_id = _make_area_path(db_conn)
+    repo.upsert_work_items(
+        db_conn,
+        area_path_id,
+        [
+            {
+                "id": 1,
+                "title": "Feature A",
+                "work_item_type": "Feature",
+                "state": "Active",
+                "assigned_to": None,
+                "changed_date": datetime.datetime(2026, 7, 1, 12, 0, 0),
+                "start_date": datetime.datetime(2026, 1, 10, 0, 0, 0),
+                "target_date": datetime.datetime(2026, 2, 28, 0, 0, 0),
+                "parent_id": None,
+                "raw_json": "{}",
+            }
+        ],
+    )
+    db_conn.commit()
+
+    with db_conn.cursor() as cur:
+        cur.execute("SELECT start_date, target_date FROM work_items WHERE id = 1")
+        start_date, target_date = cur.fetchone()
+
+    assert start_date == datetime.datetime(2026, 1, 10, 0, 0, 0)
+    assert target_date == datetime.datetime(2026, 2, 28, 0, 0, 0)
