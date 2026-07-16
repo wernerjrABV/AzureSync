@@ -7,6 +7,7 @@ function item(overrides: Partial<FeatureTreeItem>): FeatureTreeItem {
     id: 1,
     title: "Item",
     work_item_type: "Feature",
+    state: null,
     parent_id: null,
     start_date: null,
     target_date: null,

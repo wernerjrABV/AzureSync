@@ -226,6 +226,7 @@ def test_list_features_tree_includes_created_activated_closed_dates(db_conn):
     assert rows[0]["created_date"].isoformat() == "2025-11-01T09:00:00"
     assert rows[0]["activated_date"].isoformat() == "2025-12-01T09:00:00"
     assert rows[0]["closed_date"].isoformat() == "2026-06-15T17:30:00"
+    assert rows[0]["state"] == "Closed"
 
 
 def test_list_features_tree_excludes_cancelled_and_removed(db_conn):

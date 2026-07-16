@@ -88,7 +88,7 @@ def list_features_tree(conn: psycopg.Connection, *, area_path_id: int) -> list[d
     with conn.cursor(row_factory=dict_row) as cur:
         cur.execute(
             """
-            SELECT id, title, work_item_type, parent_id, start_date, target_date,
+            SELECT id, title, work_item_type, state, parent_id, start_date, target_date,
                    created_date, activated_date, closed_date
             FROM work_items AS w
             WHERE area_path_id = %s

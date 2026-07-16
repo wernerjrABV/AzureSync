@@ -4,6 +4,7 @@ export interface FeatureTreeNode {
   id: number;
   title: string;
   workItemType: string;
+  state: string | null;
   startDate: string | null;
   targetDate: string | null;
   // The node's own date used for ordering — start_date, falling back to
@@ -53,6 +54,26 @@ function sortByEffectiveDate(node: FeatureTreeNode): void {
   }
 }
 
+// Maps Azure DevOps work item states to Badge variants for the roadmap tree.
+export function stateToBadgeVariant(state: string | null): "neutral" | "info" | "success" | "error" {
+  switch (state) {
+    case "Active":
+    case "In Progress":
+    case "Committed":
+      return "info";
+    case "Resolved":
+    case "Closed":
+    case "Done":
+      return "success";
+    case "Cancelled":
+    case "Canceled":
+    case "Removed":
+      return "error";
+    default:
+      return "neutral";
+  }
+}
+
 export function buildFeatureTree(items: FeatureTreeItem[]): FeatureTreeNode[] {
   const nodesById = new Map<number, FeatureTreeNode>();
   for (const item of items) {
@@ -60,6 +81,7 @@ export function buildFeatureTree(items: FeatureTreeItem[]): FeatureTreeNode[] {
       id: item.id,
       title: item.title ?? `#${item.id}`,
       workItemType: item.work_item_type ?? "Unknown",
+      state: item.state,
       startDate: item.start_date,
       targetDate: item.target_date,
       effectiveDate: computeEffectiveDate(item),
