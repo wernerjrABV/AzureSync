@@ -55,4 +55,14 @@ def create_app(conn_factory=db.get_connection) -> Flask:
             }
         )
 
+    @app.route("/api/features-tree", methods=["GET"])
+    def list_features_tree():
+        area_path_id = request.args.get("area_path_id", type=int)
+        if area_path_id is None:
+            return jsonify({"error": "area_path_id is required"}), 400
+
+        conn = conn_factory()
+        rows = repo.list_features_tree(conn, area_path_id=area_path_id)
+        return jsonify({"data": rows})
+
     return app

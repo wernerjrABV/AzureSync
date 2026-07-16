@@ -142,3 +142,36 @@ def test_list_work_items_filters_by_area_path_id(client, db_conn):
     body = response.get_json()
     assert body["pagination"]["total"] == 1
     assert body["data"][0]["id"] == 1
+
+
+def test_list_features_tree_returns_envelope(client, db_conn):
+    with db_conn.cursor() as cur:
+        cur.execute(
+            "INSERT INTO area_paths (organization, project, area_path) VALUES (%s, %s, %s) RETURNING id",
+            ("org", "proj", "proj\\A"),
+        )
+        area_path_id = cur.fetchone()[0]
+        cur.execute(
+            """
+            INSERT INTO work_items (id, area_path_id, title, work_item_type, state, parent_id, start_date, target_date, raw_json)
+            VALUES (1, %s, 'Feat A', 'Feature', 'Active', NULL, '2026-01-10T00:00:00', '2026-02-28T00:00:00', '{}')
+            """,
+            (area_path_id,),
+        )
+    db_conn.commit()
+
+    response = client.get(f"/api/features-tree?area_path_id={area_path_id}")
+
+    assert response.status_code == 200
+    body = response.get_json()
+    assert body["data"][0]["id"] == 1
+    assert body["data"][0]["work_item_type"] == "Feature"
+    assert body["data"][0]["start_date"] == "2026-01-10T00:00:00"
+    assert body["data"][0]["target_date"] == "2026-02-28T00:00:00"
+
+
+def test_list_features_tree_requires_area_path_id(client):
+    response = client.get("/api/features-tree")
+
+    assert response.status_code == 400
+    assert response.get_json() == {"error": "area_path_id is required"}
