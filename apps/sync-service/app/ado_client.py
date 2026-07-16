@@ -131,7 +131,7 @@ class AdoClient:
         assigned_to_field = fields.get("System.AssignedTo")
         assigned_to = None
         if isinstance(assigned_to_field, dict):
-            assigned_to = assigned_to_field.get("uniqueName")
+            assigned_to = assigned_to_field.get("displayName")
         elif isinstance(assigned_to_field, str):
             assigned_to = assigned_to_field
 

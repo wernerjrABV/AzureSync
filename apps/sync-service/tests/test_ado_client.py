@@ -92,7 +92,7 @@ def test_get_work_items_batch_maps_fields(mock_post):
     assert item["title"] == "Bug A"
     assert item["work_item_type"] == "Bug"
     assert item["state"] == "Active"
-    assert item["assigned_to"] == "alice@example.com"
+    assert item["assigned_to"] == "Alice"
     assert item["changed_date"] == datetime.datetime(2026, 7, 1, 12, 0, 0)
     raw = json.loads(item["raw_json"])
     assert raw["id"] == 1
