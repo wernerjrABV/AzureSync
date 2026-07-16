@@ -51,6 +51,9 @@ def list_work_items(
 
     search = (search or "").strip()
     if search:
+        # Known, accepted limitation: literal % or _ typed by the user act as
+        # ILIKE wildcards (e.g. "50_" also matches "501"). Not a security
+        # issue (query is parameterized) — deliberately not escaped here.
         pattern = f"%{search}%"
         where_clauses.append(
             "(id::text ILIKE %s OR title ILIKE %s OR work_item_type ILIKE %s "

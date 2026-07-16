@@ -29,21 +29,28 @@ def extract_display_name(raw_json: str) -> str | None:
 
 def run(conn) -> int:
     updated = 0
-    with conn.cursor(name="backfill_assigned_to") as read_cur:
+
+    # Read all candidate rows into memory first: a server-side/named cursor
+    # would be invalidated by the periodic conn.commit() below (PostgreSQL
+    # closes cursors without WITH HOLD on commit), and this table is not
+    # expected to be large enough for a one-off script to need streaming.
+    with conn.cursor() as read_cur:
         read_cur.execute(
             "SELECT id, raw_json, assigned_to FROM work_items WHERE raw_json IS NOT NULL"
         )
-        with conn.cursor() as write_cur:
-            for work_item_id, raw_json, current_assigned_to in read_cur:
-                display_name = extract_display_name(json.dumps(raw_json))
-                if display_name != current_assigned_to:
-                    write_cur.execute(
-                        "UPDATE work_items SET assigned_to = %s WHERE id = %s",
-                        (display_name, work_item_id),
-                    )
-                    updated += 1
-                    if updated % BATCH_SIZE == 0:
-                        conn.commit()
+        rows = read_cur.fetchall()
+
+    with conn.cursor() as write_cur:
+        for work_item_id, raw_json, current_assigned_to in rows:
+            display_name = extract_display_name(json.dumps(raw_json))
+            if display_name != current_assigned_to:
+                write_cur.execute(
+                    "UPDATE work_items SET assigned_to = %s WHERE id = %s",
+                    (display_name, work_item_id),
+                )
+                updated += 1
+                if updated % BATCH_SIZE == 0:
+                    conn.commit()
     conn.commit()
     return updated
 

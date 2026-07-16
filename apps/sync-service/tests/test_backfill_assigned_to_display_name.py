@@ -27,11 +27,15 @@ def test_extract_display_name_returns_none_for_dict_without_display_name():
 
 
 def _make_fake_conn(rows):
-    """Build a MagicMock connection whose named (read) cursor iterates over
-    `rows` (id, raw_json_dict, assigned_to) tuples, and whose unnamed (write)
-    cursor records executed statements/params."""
+    """Build a MagicMock connection whose first `conn.cursor()` call (the
+    client-side read cursor) returns `rows` (id, raw_json_dict, assigned_to)
+    tuples via fetchall(), and whose second `conn.cursor()` call (the write
+    cursor) records executed statements/params.
+
+    No named/server-side cursor is used, since that would be invalidated by
+    the periodic conn.commit() in run()."""
     read_cursor = MagicMock()
-    read_cursor.__iter__.return_value = iter(rows)
+    read_cursor.fetchall.return_value = list(rows)
     read_cursor.__enter__.return_value = read_cursor
     read_cursor.__exit__.return_value = False
 
@@ -40,13 +44,7 @@ def _make_fake_conn(rows):
     write_cursor.__exit__.return_value = False
 
     conn = MagicMock()
-
-    def cursor_side_effect(*args, **kwargs):
-        if kwargs.get("name") or (args and args[0]):
-            return read_cursor
-        return write_cursor
-
-    conn.cursor.side_effect = cursor_side_effect
+    conn.cursor.side_effect = [read_cursor, write_cursor]
     return conn, write_cursor
 
 

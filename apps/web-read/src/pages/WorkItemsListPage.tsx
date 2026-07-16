@@ -103,6 +103,10 @@ export default function WorkItemsListPage() {
         />
       )}
 
+      {!areaPathsLoaded && (
+        <Spinner label="Loading area paths" />
+      )}
+
       {areaPathId !== undefined && loading && !error && (
         <Spinner label="Loading work items" />
       )}
