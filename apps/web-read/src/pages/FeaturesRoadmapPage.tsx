@@ -2,16 +2,14 @@ import { useEffect, useState } from "react";
 import { Card } from "@astryxdesign/core/Layout";
 import { HStack } from "@astryxdesign/core/Layout";
 import { Selector } from "@astryxdesign/core/Selector";
-import { Table, proportional } from "@astryxdesign/core/Table";
 import { Banner } from "@astryxdesign/core/Banner";
 import { EmptyState } from "@astryxdesign/core/EmptyState";
 import { Spinner } from "@astryxdesign/core/Spinner";
 import { Badge } from "@astryxdesign/core/Badge";
-import { Text } from "@astryxdesign/core/Text";
 import { TreeList, type TreeListItemData } from "@astryxdesign/core/TreeList";
+import GanttChart from "../components/GanttChart";
 import { fetchAreaPaths, fetchFeaturesTree } from "../services/apiReadClient";
-import { buildFeatureTree, type FeatureTreeNode } from "../utils/buildFeatureTree";
-import { buildGanttMonths, featureCoversMonth, datedFeatures } from "../utils/ganttMonths";
+import { buildFeatureTree, stateToBadgeVariant, type FeatureTreeNode } from "../utils/buildFeatureTree";
 import { quarterKey, quarterLabel } from "../utils/quarter";
 import type { AreaPath } from "../models/areaPath";
 import type { FeatureTreeItem } from "../models/feature";
@@ -23,8 +21,9 @@ function formatDate(iso: string | null): string {
 function nodeToTreeItem(node: FeatureTreeNode): TreeListItemData {
   return {
     id: String(node.id),
-    label: node.title,
+    label: `#${node.id} ${node.title}`,
     description: `${node.workItemType} · ${formatDate(node.startDate)} → ${formatDate(node.targetDate)}`,
+    endContent: <Badge variant={stateToBadgeVariant(node.state)} label={node.state ?? "Unknown"} />,
     isExpanded: node.workItemType === "Epic",
     children:
       node.children.length > 0
@@ -56,11 +55,6 @@ function toTreeItemsWithQuarterSeparators(
   }
   return result;
 }
-
-type GanttRow = { id: number; title: string; coveredMonthKeys: Set<string> } & Record<
-  string,
-  unknown
->;
 
 export default function FeaturesRoadmapPage() {
   const [areaPaths, setAreaPaths] = useState<AreaPath[]>([]);
@@ -97,15 +91,6 @@ export default function FeaturesRoadmapPage() {
   }, [areaPathId]);
 
   const tree = buildFeatureTree(items);
-  const dated = datedFeatures(items);
-  const months = buildGanttMonths(items);
-  const excludedCount = items.filter((item) => item.work_item_type === "Feature").length - dated.length;
-
-  const ganttRows: GanttRow[] = dated.map((feature) => ({
-    id: feature.id,
-    title: feature.title ?? `#${feature.id}`,
-    coveredMonthKeys: new Set(months.filter((m) => featureCoversMonth(feature, m.key)).map((m) => m.key)),
-  }));
 
   return (
     <Card>
@@ -144,39 +129,8 @@ export default function FeaturesRoadmapPage() {
 
       {areaPathId !== undefined && !loading && !error && tree.length > 0 && (
         <>
+          <GanttChart roots={tree} />
           <TreeList items={toTreeItemsWithQuarterSeparators(tree, "root")} density="balanced" />
-
-          {excludedCount > 0 && (
-            <Text>
-              {excludedCount} feature(s) hidden from the Gantt below for missing start or target date.
-            </Text>
-          )}
-
-          {ganttRows.length === 0 ? (
-            <EmptyState
-              title="No features with both start and target dates"
-              description="The Gantt chart needs at least one Feature with both dates set."
-            />
-          ) : (
-            <Table
-              data={ganttRows}
-              idKey="id"
-              density="balanced"
-              dividers="rows"
-              columns={[
-                { key: "title", header: "Feature", width: proportional(3) },
-                ...months.map((month) => ({
-                  key: month.key,
-                  header: month.label,
-                  width: proportional(1),
-                  renderCell: (row: GanttRow) =>
-                    row.coveredMonthKeys.has(month.key) ? (
-                      <Badge variant="info" label="" />
-                    ) : null,
-                })),
-              ]}
-            />
-          )}
         </>
       )}
     </Card>
