@@ -382,31 +382,24 @@ git commit -m "chore(web-read): add @svar-ui/react-gantt dependency"
   - Astryx `EmptyState` (`@astryxdesign/core/EmptyState`), `Text` (`@astryxdesign/core/Text`)
 - Produces: `export default function GanttChart(props: { roots: FeatureTreeNode[] }): JSX.Element`, consumed by `FeaturesRoadmapPage.tsx` in Task 4.
 
-- [ ] **Step 1: Find the exact Astryx color CSS custom property names**
+- [ ] **Step 1: Create `GanttChart.css`**
 
-Run:
-```bash
-grep -rho -- "--astryx-color-[a-z-]*" node_modules/@astryxdesign/theme-neutral/dist 2>/dev/null | sort -u
-```
-Expected: a list of variable names such as `--astryx-color-info-solid`,
-`--astryx-color-success-solid`, `--astryx-color-error-solid`,
-`--astryx-color-neutral-solid` (or whatever the actual naming convention is — the
-names in Step 2 below are a placeholder pattern from the spec, not confirmed). If the
-grep finds no matches, open `node_modules/@astryxdesign/theme-neutral/dist` directly
-and locate the CSS file defining tokens, then find the four color families
-(info/success/error/neutral) used by `Badge`'s existing variants — cross-check against
-`node_modules/@astryxdesign/core/dist/Badge` source if the naming isn't obvious.
-Replace every `--astryx-color-*-solid` reference in Step 2 with the real names found
-here before moving on — do not commit placeholder names.
-
-- [ ] **Step 2: Create `GanttChart.css`**
+The real Astryx color custom properties were confirmed by reading
+`node_modules/@astryxdesign/theme-neutral/dist/theme.css` directly (there is no
+`--astryx-color-*` naming — actual prefix is `--color-`). `Badge`'s semantic variants
+(`info`/`success`/`error`) render via hardcoded hex in that package, not reusable
+custom properties, but the non-semantic family tokens are real, stable custom
+properties also used elsewhere in the theme (e.g. `.astryx-banner.info` maps to the
+"blue" family): `--color-background-blue` (info), `--color-background-green`
+(success), `--color-background-red` (error), `--color-background-gray` (neutral).
+Use these exact names — do not use `--astryx-color-*`, it doesn't exist.
 
 Create `apps/web-read/src/components/GanttChart.css`:
 
 ```css
 .wx-willow-theme {
-  --wx-gantt-project-fill-color: var(--astryx-color-neutral-solid);
-  --wx-gantt-task-fill-color: var(--astryx-color-neutral-solid);
+  --wx-gantt-project-fill-color: var(--color-background-gray);
+  --wx-gantt-task-fill-color: var(--color-background-gray);
 }
 
 .gantt-bar-fill {
@@ -414,13 +407,13 @@ Create `apps/web-read/src/components/GanttChart.css`:
   inset: 0;
   border-radius: var(--wx-gantt-bar-border-radius);
 }
-.gantt-bar-fill--info { background-color: var(--astryx-color-info-solid); }
-.gantt-bar-fill--success { background-color: var(--astryx-color-success-solid); }
-.gantt-bar-fill--error { background-color: var(--astryx-color-error-solid); }
-.gantt-bar-fill--neutral { background-color: var(--astryx-color-neutral-solid); }
+.gantt-bar-fill--info { background-color: var(--color-background-blue); }
+.gantt-bar-fill--success { background-color: var(--color-background-green); }
+.gantt-bar-fill--error { background-color: var(--color-background-red); }
+.gantt-bar-fill--neutral { background-color: var(--color-background-gray); }
 ```
 
-- [ ] **Step 3: Create `GanttChart.tsx`**
+- [ ] **Step 2: Create `GanttChart.tsx`**
 
 Create `apps/web-read/src/components/GanttChart.tsx`:
 
@@ -486,7 +479,7 @@ export default function GanttChart({ roots }: GanttChartProps) {
 }
 ```
 
-- [ ] **Step 4: Type-check**
+- [ ] **Step 3: Type-check**
 
 Run: `cd apps/web-read && npx tsc -b --noEmit`
 Expected: no errors. If `taskTemplate`'s expected prop type doesn't structurally match
@@ -495,7 +488,7 @@ Expected: no errors. If `taskTemplate`'s expected prop type doesn't structurally
 read `data.state` (relying on `ITask`'s `[key: string]: any` index signature) instead —
 resolve whichever way `tsc` reports, don't leave a type error unresolved.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 4: Commit**
 
 ```bash
 git add apps/web-read/src/components/GanttChart.tsx apps/web-read/src/components/GanttChart.css
