@@ -24,7 +24,7 @@ function toTreeItems(nodes: FeatureTreeNode[]): TreeListItemData[] {
     id: String(node.id),
     label: node.title,
     description: `${node.workItemType} · ${formatDate(node.startDate)} → ${formatDate(node.targetDate)}`,
-    isExpanded: node.workItemType !== "Feature",
+    isExpanded: node.workItemType === "Epic",
     children: node.children.length > 0 ? toTreeItems(node.children) : undefined,
   }));
 }
