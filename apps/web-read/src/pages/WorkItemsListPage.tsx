@@ -19,28 +19,38 @@ const PAGE_SIZE = 50;
 
 export default function WorkItemsListPage() {
   const [areaPaths, setAreaPaths] = useState<AreaPath[]>([]);
+  const [areaPathsLoaded, setAreaPathsLoaded] = useState(false);
   const [items, setItems] = useState<WorkItem[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [areaPathId, setAreaPathId] = useState<number | undefined>(undefined);
-  const [workItemType, setWorkItemType] = useState<string>("");
+  const [search, setSearch] = useState<string>("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     fetchAreaPaths()
-      .then(setAreaPaths)
+      .then((paths) => {
+        setAreaPaths(paths);
+        if (paths.length > 0) {
+          setAreaPathId(paths[0].id);
+        }
+      })
       .catch(() => {
-        /* area path filter is optional; a failure here just leaves the dropdown empty */
-      });
+        /* handled below via areaPathsLoaded + empty areaPaths */
+      })
+      .finally(() => setAreaPathsLoaded(true));
   }, []);
 
   useEffect(() => {
+    if (areaPathId === undefined) {
+      return;
+    }
     setLoading(true);
     setError(null);
     fetchWorkItems({
       areaPathId,
-      workItemType: workItemType || undefined,
+      search: search || undefined,
       page,
       pageSize: PAGE_SIZE,
     })
@@ -50,7 +60,7 @@ export default function WorkItemsListPage() {
       })
       .catch((err: Error) => setError(err.message))
       .finally(() => setLoading(false));
-  }, [areaPathId, workItemType, page]);
+  }, [areaPathId, search, page]);
 
   return (
     <Card>
@@ -58,8 +68,7 @@ export default function WorkItemsListPage() {
         <Selector
           label="Area path"
           hasSearch
-          hasClear
-          value={areaPathId !== undefined ? String(areaPathId) : null}
+          value={areaPathId !== undefined ? String(areaPathId) : undefined}
           onChange={(value) => {
             setPage(1);
             setAreaPathId(value ? Number(value) : undefined);
@@ -68,19 +77,18 @@ export default function WorkItemsListPage() {
             value: String(ap.id),
             label: ap.area_path,
           }))}
-          placeholder="All"
           width={280}
         />
         <TextInput
-          label="Type"
+          label="Search"
           hasClear
-          value={workItemType}
+          value={search}
           onChange={(value) => {
             setPage(1);
-            setWorkItemType(value);
+            setSearch(value);
           }}
-          placeholder="e.g. Bug"
-          width={200}
+          placeholder="Search by id, title, type, state, assigned to"
+          width={320}
         />
       </HStack>
 
@@ -88,16 +96,25 @@ export default function WorkItemsListPage() {
         <Banner status="error" title="Error loading work items" description={error} />
       )}
 
-      {loading && !error && <Spinner label="Loading work items" />}
-
-      {!loading && !error && items.length === 0 && (
+      {areaPathsLoaded && areaPaths.length === 0 && (
         <EmptyState
-          title="No work items found"
-          description="Try adjusting the area path or type filter."
+          title="No area paths configured"
+          description="Configure at least one area path in the sync service to see work items."
         />
       )}
 
-      {!loading && !error && items.length > 0 && (
+      {areaPathId !== undefined && loading && !error && (
+        <Spinner label="Loading work items" />
+      )}
+
+      {areaPathId !== undefined && !loading && !error && items.length === 0 && (
+        <EmptyState
+          title="No work items found"
+          description="Try adjusting the search."
+        />
+      )}
+
+      {areaPathId !== undefined && !loading && !error && items.length > 0 && (
         <>
           <Table
             data={items as WorkItemRow[]}
