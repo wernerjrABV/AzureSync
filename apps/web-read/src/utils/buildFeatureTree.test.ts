@@ -75,4 +75,22 @@ describe("buildFeatureTree", () => {
 
     expect(tree[0].title).toBe("#1");
   });
+
+  test("drops a Feature with no parent instead of showing it as a root", () => {
+    const tree = buildFeatureTree([
+      item({ id: 1, title: "Sol A", work_item_type: "Solution", parent_id: null }),
+      item({ id: 2, title: "Orphan Feature", work_item_type: "Feature", parent_id: null }),
+    ]);
+
+    expect(tree).toHaveLength(1);
+    expect(tree[0].id).toBe(1);
+  });
+
+  test("drops a Feature whose parent_id points to a work item outside the fetched set", () => {
+    const tree = buildFeatureTree([
+      item({ id: 1, title: "Orphan Feature", work_item_type: "Feature", parent_id: 999 }),
+    ]);
+
+    expect(tree).toHaveLength(0);
+  });
 });
