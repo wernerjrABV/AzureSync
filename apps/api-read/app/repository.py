@@ -94,8 +94,10 @@ def list_features_tree(conn: psycopg.Connection, *, area_path_id: int) -> list[d
               AND work_item_type IN ('Feature', 'Epic', 'Solution')
               AND (state IS NULL OR state NOT IN ('Cancelled', 'Canceled', 'Removed'))
               AND NOT (
-                -- Closed Solutions with no linked Feature (direct or via an Epic)
-                work_item_type = 'Solution'
+                -- Closed Epics/Solutions with no linked Feature underneath them
+                -- (direct child Feature, or via a child Epic for Solutions) have
+                -- nothing left to show — both types follow the same rule.
+                work_item_type IN ('Epic', 'Solution')
                 AND state = 'Closed'
                 AND NOT EXISTS (
                     SELECT 1 FROM work_items AS f
@@ -104,34 +106,13 @@ def list_features_tree(conn: psycopg.Connection, *, area_path_id: int) -> list[d
                       AND (f.state IS NULL OR f.state NOT IN ('Cancelled', 'Canceled', 'Removed'))
                       AND (
                         f.parent_id = w.id
-                        OR f.parent_id IN (
-                            SELECT e.id FROM work_items AS e
-                            WHERE e.parent_id = w.id AND e.work_item_type = 'Epic'
+                        OR (
+                          w.work_item_type = 'Solution'
+                          AND f.parent_id IN (
+                              SELECT e.id FROM work_items AS e
+                              WHERE e.parent_id = w.id AND e.work_item_type = 'Epic'
+                          )
                         )
-                      )
-                )
-              )
-              AND NOT (
-                -- Epics whose parent Solution is excluded by the rule above would
-                -- otherwise be orphaned as a meaningless top-level node.
-                work_item_type = 'Epic'
-                AND EXISTS (
-                    SELECT 1 FROM work_items AS sol
-                    WHERE sol.id = w.parent_id
-                      AND sol.work_item_type = 'Solution'
-                      AND sol.state = 'Closed'
-                      AND NOT EXISTS (
-                          SELECT 1 FROM work_items AS f
-                          WHERE f.area_path_id = sol.area_path_id
-                            AND f.work_item_type = 'Feature'
-                            AND (f.state IS NULL OR f.state NOT IN ('Cancelled', 'Canceled', 'Removed'))
-                            AND (
-                              f.parent_id = sol.id
-                              OR f.parent_id IN (
-                                  SELECT e.id FROM work_items AS e
-                                  WHERE e.parent_id = sol.id AND e.work_item_type = 'Epic'
-                              )
-                            )
                       )
                 )
               )

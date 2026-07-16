@@ -229,14 +229,15 @@ def test_list_features_tree_excludes_closed_solution_with_no_features(db_conn):
     # Closed, has a direct Feature -> kept
     _seed_feature_tree_item(db_conn, ap1, 2, "Sol WithFeature", "Solution", state="Closed")
     _seed_feature_tree_item(db_conn, ap1, 3, "Feat A", "Feature", parent_id=2, state="Active")
-    # Closed, has an Epic but that Epic has no Feature -> excluded
+    # Closed, has an Epic but that Epic has no Feature -> both Solution and
+    # Epic excluded, each by the same closed-with-no-feature rule.
     _seed_feature_tree_item(db_conn, ap1, 4, "Sol WithEmptyEpic", "Solution", state="Closed")
     _seed_feature_tree_item(db_conn, ap1, 5, "Epic Empty", "Epic", parent_id=4, state="Closed")
     # Closed, has an Epic that has a Feature -> kept
     _seed_feature_tree_item(db_conn, ap1, 6, "Sol WithEpicFeature", "Solution", state="Closed")
     _seed_feature_tree_item(db_conn, ap1, 7, "Epic A", "Epic", parent_id=6, state="Active")
     _seed_feature_tree_item(db_conn, ap1, 8, "Feat B", "Feature", parent_id=7, state="Active")
-    # Not Closed, no features -> kept (rule only applies to Closed solutions)
+    # Not Closed, no features -> kept (rule only applies to Closed items)
     _seed_feature_tree_item(db_conn, ap1, 9, "Sol Active Empty", "Solution", state="Active")
     # Closed, only has a Removed feature -> treated as no features, excluded
     _seed_feature_tree_item(db_conn, ap1, 10, "Sol OnlyRemovedFeature", "Solution", state="Closed")
@@ -245,3 +246,20 @@ def test_list_features_tree_excludes_closed_solution_with_no_features(db_conn):
     rows = repo.list_features_tree(db_conn, area_path_id=ap1)
 
     assert [r["id"] for r in rows] == [2, 3, 6, 7, 8, 9]
+
+
+def test_list_features_tree_applies_same_closed_no_feature_rule_to_epics(db_conn):
+    ap1 = _seed_area_path(db_conn)
+    _seed_feature_tree_item(db_conn, ap1, 1, "Sol A", "Solution", state="Active")
+    # Closed Epic under an Active Solution, no Feature -> excluded on its own,
+    # independent of its parent's state (the two types are treated the same).
+    _seed_feature_tree_item(db_conn, ap1, 2, "Epic Empty Closed", "Epic", parent_id=1, state="Closed")
+    # Closed Epic under the same Solution, has a Feature -> kept
+    _seed_feature_tree_item(db_conn, ap1, 3, "Epic Closed WithFeature", "Epic", parent_id=1, state="Closed")
+    _seed_feature_tree_item(db_conn, ap1, 4, "Feat A", "Feature", parent_id=3, state="Active")
+    # Active Epic, no Feature -> kept (rule only applies when Closed)
+    _seed_feature_tree_item(db_conn, ap1, 5, "Epic Active Empty", "Epic", parent_id=1, state="Active")
+
+    rows = repo.list_features_tree(db_conn, area_path_id=ap1)
+
+    assert [r["id"] for r in rows] == [1, 3, 4, 5]
