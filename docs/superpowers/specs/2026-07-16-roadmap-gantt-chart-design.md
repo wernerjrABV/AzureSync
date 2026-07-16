@@ -72,7 +72,7 @@ export interface GanttTask {
   type: "summary" | "task";
   parent: number | 0;
   open: boolean;
-  barCss: string; // "gantt-state-info" | "gantt-state-success" | "gantt-state-error" | "gantt-state-neutral"
+  state: string | null;
 }
 
 export function buildGanttTasks(roots: FeatureTreeNode[]): GanttTask[];
@@ -80,13 +80,17 @@ export function buildGanttTasks(roots: FeatureTreeNode[]): GanttTask[];
 
 - Recursively walks `roots`, skipping (and counting) any node without both dates.
 - `text` is `` `#${id} ${title}` `` to match the `TreeList` row label convention.
-- `barCss` is derived from `stateToBadgeVariant(node.state)` (already exported from
-  `buildFeatureTree.ts`), mapped 1:1 to a CSS class name (`gantt-state-<variant>`).
-- `open` defaults to `false` for every row (fully collapsed on first render); SVAR's
-  own interaction toggles it thereafter — we don't manage this via React state
-  ourselves unless SVAR's controlled-mode API turns out to require it (confirm during
-  implementation; if SVAR requires a controlled `tasks`/`open` state, lift it into
-  `GanttChart` as a `useState`, otherwise let SVAR manage it internally).
+- `state` is passed through verbatim (`node.state`); SVAR's `ITask` type has a
+  `[key: string]: any` index signature, so this rides through unmodified and is read
+  back inside `taskTemplate` (see Component section) to pick the bar color — SVAR has
+  **no native per-task color field** (confirmed against `types/index.d.ts` in the
+  `svar-widgets/react-gantt` repo and `@svar-ui/gantt-store`'s `ITask`), only
+  per-`type` theme CSS vars, which is why `state` must travel on the task object for
+  a template-level color decision instead.
+- `open` defaults to `false` for every row (fully collapsed on first render); confirmed
+  via the `GanttReadOnly.jsx` demo pattern that `tasks`/`links`/`scales` are passed
+  once and SVAR manages expand/collapse internally — no controlled state needed on our
+  side.
 
 ### Existing `ganttMonths.ts`
 
@@ -110,40 +114,84 @@ interface GanttChartProps {
 - Computes `tasks = buildGanttTasks(roots)` and `omittedCount`.
 - If `tasks.length === 0`: render Astryx `EmptyState` ("No items with both start and
   target dates to plot").
-- Else: render `Text` with the omitted-count note (only if `omittedCount > 0`), then
-  the SVAR `<Gantt tasks={tasks} scales={[{ unit: "month", step: 1, format: "MMM yyyy" }]} readonly />`
-  (exact prop names for readonly mode and month-scale formatting to be confirmed
-  against `docs.svar.dev/react/gantt/samples/` during implementation — the docs
-  reference a dedicated "Editor: readonly" demo but the exact prop wasn't visible in
-  search results).
+- Else: render `Text` with the omitted-count note (only if `omittedCount > 0`), then:
+
+```tsx
+<Willow>
+  <Gantt
+    readonly={true}
+    tasks={tasks}
+    scales={[{ unit: "month", step: 1, format: "%F %Y" }]}
+    taskTemplate={GanttBarContent}
+  />
+</Willow>
+```
+
+  `readonly` and the `scales` shape/format string (`%F %Y` = e.g. "July 2026") are
+  confirmed from `demos/cases/GanttReadOnly.jsx` and `getting_started` in the
+  `svar-widgets/react-gantt` repo — not a guess.
+
+- `GanttBarContent` (colocated in `GanttChart.tsx`, not a separate file — it's a small
+  render function, no independent responsibility): a `taskTemplate` implementation
+  matching the confirmed signature `function GanttBarContent({ data, onAction })`
+  (from `demos/custom/MyTaskContent.jsx`). It renders a single absolutely-positioned
+  overlay `div` that fully covers the bar area and carries a state-derived CSS class:
+
+```tsx
+function GanttBarContent({ data }: { data: GanttTask }) {
+  const variant = stateToBadgeVariant(data.state);
+  return <div className={`gantt-bar-fill gantt-bar-fill--${variant}`} />;
+}
+```
+
+  This overlay is necessary because SVAR only exposes bar color via per-`type` theme
+  CSS vars (`--wx-gantt-task-fill-color` / `--wx-gantt-project-fill-color`), not
+  per-task — see Theming section.
 
 ## Theming
 
 New file: `apps/web-read/src/components/GanttChart.css`, imported once by
 `GanttChart.tsx` alongside `@svar-ui/react-gantt/all.css`.
 
-Maps SVAR's theme CSS custom properties to Astryx's own tokens — no hardcoded hex,
-no ad-hoc layout/spacing CSS. This is the one sanctioned exception to the "no custom
-CSS" rule in `CLAUDE.md`: SVAR's public theming API *is* CSS custom properties, there
-is no React-prop equivalent, so overriding them is integration, not ad-hoc styling.
+Two distinct pieces, both in `GanttChart.css`, imported once by `GanttChart.tsx`
+alongside `@svar-ui/react-gantt/all.css`:
+
+**1. Base theme mapping** (sanctioned exception to the "no custom CSS" rule in
+`CLAUDE.md`: SVAR's public theming API *is* CSS custom properties, there's no
+React-prop equivalent — overriding them is integration, not ad-hoc styling). Only
+needs to set a neutral fallback for the two `type`s we use, since real per-row color
+comes from the overlay (below) and fully covers it:
 
 ```css
 .wx-willow-theme {
-  --wx-gantt-project-color: var(--astryx-color-neutral-solid); /* summary rows, overridden per-row by barCss anyway */
+  --wx-gantt-project-fill-color: var(--astryx-color-neutral-solid);
+  --wx-gantt-task-fill-color: var(--astryx-color-neutral-solid);
 }
-.gantt-state-info    { --wx-gantt-task-fill-color: var(--astryx-color-info-solid); }
-.gantt-state-success { --wx-gantt-task-fill-color: var(--astryx-color-success-solid); }
-.gantt-state-error   { --wx-gantt-task-fill-color: var(--astryx-color-error-solid); }
-.gantt-state-neutral { --wx-gantt-task-fill-color: var(--astryx-color-neutral-solid); }
 ```
 
-Exact Astryx token variable names must be confirmed by inspecting the installed
-`@astryxdesign/theme-neutral` package during implementation (not verified in this
-design pass — package wasn't resolvable in the current environment). If Astryx tokens
-turn out not to be exposed as CSS custom properties at all, fall back to importing the
-same TS/JS token values Astryx components consume internally, rather than hardcoding
-hex — this would need a short follow-up investigation, flagged here rather than
-resolved.
+**2. Bar overlay** (positioning-only CSS — an actual small addition beyond variable
+mapping, needed because SVAR has no per-task color field; approved explicitly as the
+resolution for state-based coloring):
+
+```css
+.gantt-bar-fill {
+  position: absolute;
+  inset: 0;
+  border-radius: var(--wx-gantt-bar-border-radius);
+}
+.gantt-bar-fill--info    { background-color: var(--astryx-color-info-solid); }
+.gantt-bar-fill--success { background-color: var(--astryx-color-success-solid); }
+.gantt-bar-fill--error   { background-color: var(--astryx-color-error-solid); }
+.gantt-bar-fill--neutral { background-color: var(--astryx-color-neutral-solid); }
+```
+
+Exact Astryx token variable names (`--astryx-color-*-solid` is a placeholder pattern)
+must be confirmed by inspecting the installed `@astryxdesign/theme-neutral` package
+during implementation — not verified in this design pass, the package wasn't
+resolvable in the current environment. If Astryx tokens turn out not to be exposed as
+CSS custom properties at all, fall back to importing the same TS/JS token values
+Astryx components consume internally rather than hardcoding hex — flagged as an open
+item below, not resolved here.
 
 ## Integration
 
@@ -156,8 +204,8 @@ block. No changes to the `TreeList` rendering or its surrounding conditionals.
 
 - `buildGanttTasks.test.ts` (new): hierarchy flattening (Solution → Epic → Feature,
   `parent` wiring), omission of nodes missing either date (and correct omitted count),
-  `type` assignment (`summary` for roots, `task` otherwise), `barCss` derived correctly
-  per state via `stateToBadgeVariant`.
+  `type` assignment (`summary` for roots, `task` otherwise), `state` passed through
+  unmodified for later use by `GanttBarContent`.
 - No `GanttChart.test.tsx` — no precedent for component-level tests in this app (only
   `.ts` utils are unit-tested; pages/components are verified manually in the browser
   per project convention). Verify in the dev server: chart renders, bars span the
@@ -167,7 +215,8 @@ block. No changes to the `TreeList` rendering or its surrounding conditionals.
 
 ## Open items to resolve during implementation (not blocking this spec)
 
-1. Exact SVAR prop names for readonly mode and month-scale formatting.
-2. Whether SVAR needs `open` state controlled from React or manages it internally.
-3. Exact Astryx CSS custom property names for `--astryx-color-*-solid` (or equivalent).
-4. Whether to delete the now-orphaned `ganttMonths.ts` / `ganttMonths.test.ts`.
+1. Exact Astryx CSS custom property names for `--astryx-color-*-solid` (or equivalent).
+2. Whether to delete the now-orphaned `ganttMonths.ts` / `ganttMonths.test.ts`.
+3. Exact `taskTemplate` callback prop name (`onAction` per the JSX demo vs `onaction`
+   per one type-summary pass) — irrelevant to this plan since the overlay doesn't use
+   it, but note it if a later change needs task interactivity.
