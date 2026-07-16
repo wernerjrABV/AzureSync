@@ -156,7 +156,7 @@ def test_list_work_items_empty_search_returns_all(db_conn):
 
 def _seed_feature_tree_item(
     conn, area_path_id, item_id, title, work_item_type, parent_id=None,
-    start_date=None, target_date=None,
+    start_date=None, target_date=None, state="Active",
 ):
     with conn.cursor() as cur:
         cur.execute(
@@ -164,9 +164,9 @@ def _seed_feature_tree_item(
             INSERT INTO work_items
                 (id, area_path_id, title, work_item_type, state, parent_id,
                  start_date, target_date, raw_json)
-            VALUES (%s, %s, %s, %s, 'Active', %s, %s, %s, '{}')
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, '{}')
             """,
-            (item_id, area_path_id, title, work_item_type, parent_id, start_date, target_date),
+            (item_id, area_path_id, title, work_item_type, state, parent_id, start_date, target_date),
         )
     conn.commit()
 
@@ -206,3 +206,17 @@ def test_list_features_tree_includes_dates_and_parent(db_conn):
     assert rows[0]["parent_id"] is None
     assert rows[0]["start_date"].isoformat() == "2026-01-10T00:00:00"
     assert rows[0]["target_date"].isoformat() == "2026-02-28T00:00:00"
+
+
+def test_list_features_tree_excludes_cancelled_and_removed(db_conn):
+    ap1 = _seed_area_path(db_conn)
+    _seed_feature_tree_item(db_conn, ap1, 1, "Sol A", "Solution", state="Active")
+    _seed_feature_tree_item(db_conn, ap1, 2, "Sol B", "Solution", state="Cancelled")
+    _seed_feature_tree_item(db_conn, ap1, 3, "Sol C", "Solution", state="Canceled")
+    _seed_feature_tree_item(db_conn, ap1, 4, "Sol D", "Solution", state="Removed")
+    _seed_feature_tree_item(db_conn, ap1, 5, "Feat A", "Feature", parent_id=1, state="Active")
+    _seed_feature_tree_item(db_conn, ap1, 6, "Feat B", "Feature", parent_id=1, state="Removed")
+
+    rows = repo.list_features_tree(db_conn, area_path_id=ap1)
+
+    assert [r["id"] for r in rows] == [1, 5]

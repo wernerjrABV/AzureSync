@@ -92,6 +92,7 @@ def list_features_tree(conn: psycopg.Connection, *, area_path_id: int) -> list[d
             FROM work_items
             WHERE area_path_id = %s
               AND work_item_type IN ('Feature', 'Epic', 'Solution')
+              AND (state IS NULL OR state NOT IN ('Cancelled', 'Canceled', 'Removed'))
             ORDER BY id
             """,
             (area_path_id,),
