@@ -12,6 +12,7 @@
   "dependencies": {
     "@astryxdesign/core": "^0.1.6",
     "@astryxdesign/theme-neutral": "^0.1.6",
+    "@svar-ui/react-gantt": "^2.7.1",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },
