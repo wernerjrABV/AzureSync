@@ -1,5 +1,6 @@
 import type { WorkItem, PaginatedResponse } from "../models/workItem";
 import type { AreaPath } from "../models/areaPath";
+import type { FeatureTreeItem } from "../models/feature";
 
 const BASE_URL = import.meta.env.VITE_API_READ_BASE_URL ?? "http://127.0.0.1:5001";
 
@@ -36,4 +37,15 @@ export async function fetchAreaPaths(): Promise<AreaPath[]> {
     throw new Error(`Failed to fetch area paths: ${response.status}`);
   }
   return response.json();
+}
+
+export async function fetchFeaturesTree(areaPathId: number): Promise<FeatureTreeItem[]> {
+  const response = await fetch(
+    `${BASE_URL}/api/features-tree?area_path_id=${encodeURIComponent(String(areaPathId))}`
+  );
+  if (!response.ok) {
+    throw new Error(`Failed to fetch features tree: ${response.status}`);
+  }
+  const body = await response.json();
+  return body.data;
 }
