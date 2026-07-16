@@ -227,3 +227,59 @@ def test_get_work_item_updates_retries_on_429(mock_get, mock_sleep):
 
     assert updates == []
     mock_sleep.assert_called_once_with(5)
+
+
+@patch("app.ado_client.requests.post")
+def test_get_work_items_batch_extracts_start_and_target_dates(mock_post):
+    mock_post.return_value = _response(
+        200,
+        {
+            "value": [
+                {
+                    "id": 1,
+                    "fields": {
+                        "System.Title": "Feature A",
+                        "System.WorkItemType": "Feature",
+                        "System.State": "Active",
+                        "System.ChangedDate": "2026-07-01T12:00:00Z",
+                        "Microsoft.VSTS.Scheduling.StartDate": "2026-01-10T00:00:00Z",
+                        "Microsoft.VSTS.Scheduling.TargetDate": "2026-02-28T00:00:00Z",
+                    },
+                }
+            ]
+        },
+    )
+
+    client = AdoClient("org", "proj", pat="fake-pat")
+    items = client.get_work_items_batch([1])
+
+    item = items[0]
+    assert item["start_date"] == datetime.datetime(2026, 1, 10, 0, 0, 0)
+    assert item["target_date"] == datetime.datetime(2026, 2, 28, 0, 0, 0)
+
+
+@patch("app.ado_client.requests.post")
+def test_get_work_items_batch_handles_missing_scheduling_dates(mock_post):
+    mock_post.return_value = _response(
+        200,
+        {
+            "value": [
+                {
+                    "id": 2,
+                    "fields": {
+                        "System.Title": "Bug B",
+                        "System.WorkItemType": "Bug",
+                        "System.State": "Active",
+                        "System.ChangedDate": "2026-07-01T12:00:00Z",
+                    },
+                }
+            ]
+        },
+    )
+
+    client = AdoClient("org", "proj", pat="fake-pat")
+    items = client.get_work_items_batch([2])
+
+    item = items[0]
+    assert item["start_date"] is None
+    assert item["target_date"] is None

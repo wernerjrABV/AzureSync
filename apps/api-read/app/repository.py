@@ -82,3 +82,18 @@ def list_work_items(
         rows = cur.fetchall()
 
     return rows, total
+
+
+def list_features_tree(conn: psycopg.Connection, *, area_path_id: int) -> list[dict]:
+    with conn.cursor(row_factory=dict_row) as cur:
+        cur.execute(
+            """
+            SELECT id, title, work_item_type, parent_id, start_date, target_date
+            FROM work_items
+            WHERE area_path_id = %s
+              AND work_item_type IN ('Feature', 'Epic', 'Solution')
+            ORDER BY id
+            """,
+            (area_path_id,),
+        )
+        return cur.fetchall()

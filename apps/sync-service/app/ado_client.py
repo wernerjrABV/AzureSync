@@ -126,6 +126,14 @@ class AdoClient:
         return results
 
     @staticmethod
+    def _parse_ado_date(raw_value: str | None) -> datetime.datetime | None:
+        if not raw_value:
+            return None
+        return datetime.datetime.strptime(
+            raw_value.split(".")[0].rstrip("Z"), "%Y-%m-%dT%H:%M:%S"
+        )
+
+    @staticmethod
     def _map_work_item(raw: dict) -> dict:
         fields = raw.get("fields", {})
         assigned_to_field = fields.get("System.AssignedTo")
@@ -135,12 +143,13 @@ class AdoClient:
         elif isinstance(assigned_to_field, str):
             assigned_to = assigned_to_field
 
-        changed_date_raw = fields.get("System.ChangedDate")
-        changed_date = None
-        if changed_date_raw:
-            changed_date = datetime.datetime.strptime(
-                changed_date_raw.split(".")[0].rstrip("Z"), "%Y-%m-%dT%H:%M:%S"
-            )
+        changed_date = AdoClient._parse_ado_date(fields.get("System.ChangedDate"))
+        start_date = AdoClient._parse_ado_date(
+            fields.get("Microsoft.VSTS.Scheduling.StartDate")
+        )
+        target_date = AdoClient._parse_ado_date(
+            fields.get("Microsoft.VSTS.Scheduling.TargetDate")
+        )
 
         parent_id = fields.get("System.Parent")
         if parent_id is None:
@@ -156,6 +165,8 @@ class AdoClient:
             "state": fields.get("System.State"),
             "assigned_to": assigned_to,
             "changed_date": changed_date,
+            "start_date": start_date,
+            "target_date": target_date,
             "parent_id": parent_id,
             "raw_json": json.dumps(raw),
         }

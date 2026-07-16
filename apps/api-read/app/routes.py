@@ -1,11 +1,34 @@
+from datetime import date, datetime
+
 from flask import Flask, jsonify, request
+from flask.json.provider import DefaultJSONProvider
 
 from app import db, repository as repo
 from app.config import get_cors_allowed_origins
 
 
+class ISODateJSONProvider(DefaultJSONProvider):
+    """Serializes datetime/date objects as ISO 8601 strings.
+
+    Flask's DefaultJSONProvider (via Werkzeug's http_date) renders
+    datetime/date objects as RFC 1123 strings (e.g. "Sat, 10 Jan 2026
+    00:00:00 GMT"). The frontend expects ISO 8601 (e.g.
+    "2026-01-10T00:00:00"), so this provider overrides that behavior
+    while falling back to the default provider for everything else.
+    """
+
+    @staticmethod
+    def default(obj):
+        if isinstance(obj, datetime):
+            return obj.isoformat()
+        if isinstance(obj, date):
+            return obj.isoformat()
+        return DefaultJSONProvider.default(obj)
+
+
 def create_app(conn_factory=db.get_connection) -> Flask:
     app = Flask(__name__)
+    app.json = ISODateJSONProvider(app)
 
     @app.after_request
     def add_cors_headers(response):
@@ -54,5 +77,15 @@ def create_app(conn_factory=db.get_connection) -> Flask:
                 "pagination": {"page": page, "page_size": page_size, "total": total},
             }
         )
+
+    @app.route("/api/features-tree", methods=["GET"])
+    def list_features_tree():
+        area_path_id = request.args.get("area_path_id", type=int)
+        if area_path_id is None:
+            return jsonify({"error": "area_path_id is required"}), 400
+
+        conn = conn_factory()
+        rows = repo.list_features_tree(conn, area_path_id=area_path_id)
+        return jsonify({"data": rows})
 
     return app

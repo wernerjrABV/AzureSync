@@ -152,3 +152,57 @@ def test_list_work_items_empty_search_returns_all(db_conn):
     rows, total = repo.list_work_items(db_conn, area_path_id=ap1, search="")
 
     assert total == 1
+
+
+def _seed_feature_tree_item(
+    conn, area_path_id, item_id, title, work_item_type, parent_id=None,
+    start_date=None, target_date=None,
+):
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO work_items
+                (id, area_path_id, title, work_item_type, state, parent_id,
+                 start_date, target_date, raw_json)
+            VALUES (%s, %s, %s, %s, 'Active', %s, %s, %s, '{}')
+            """,
+            (item_id, area_path_id, title, work_item_type, parent_id, start_date, target_date),
+        )
+    conn.commit()
+
+
+def test_list_features_tree_returns_only_feature_epic_solution(db_conn):
+    ap1 = _seed_area_path(db_conn)
+    _seed_feature_tree_item(db_conn, ap1, 1, "Sol A", "Solution")
+    _seed_feature_tree_item(db_conn, ap1, 2, "Epic A", "Epic", parent_id=1)
+    _seed_feature_tree_item(db_conn, ap1, 3, "Feat A", "Feature", parent_id=2)
+    _seed_feature_tree_item(db_conn, ap1, 4, "Bug A", "Bug", parent_id=2)
+
+    rows = repo.list_features_tree(db_conn, area_path_id=ap1)
+
+    assert [r["id"] for r in rows] == [1, 2, 3]
+
+
+def test_list_features_tree_filters_by_area_path_id(db_conn):
+    ap1 = _seed_area_path(db_conn, area_path="proj\\A")
+    ap2 = _seed_area_path(db_conn, area_path="proj\\B")
+    _seed_feature_tree_item(db_conn, ap1, 1, "Feat A", "Feature")
+    _seed_feature_tree_item(db_conn, ap2, 2, "Feat B", "Feature")
+
+    rows = repo.list_features_tree(db_conn, area_path_id=ap1)
+
+    assert [r["id"] for r in rows] == [1]
+
+
+def test_list_features_tree_includes_dates_and_parent(db_conn):
+    ap1 = _seed_area_path(db_conn)
+    _seed_feature_tree_item(
+        db_conn, ap1, 1, "Feat A", "Feature", parent_id=None,
+        start_date="2026-01-10T00:00:00", target_date="2026-02-28T00:00:00",
+    )
+
+    rows = repo.list_features_tree(db_conn, area_path_id=ap1)
+
+    assert rows[0]["parent_id"] is None
+    assert rows[0]["start_date"].isoformat() == "2026-01-10T00:00:00"
+    assert rows[0]["target_date"].isoformat() == "2026-02-28T00:00:00"
