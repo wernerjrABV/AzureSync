@@ -1,0 +1,14 @@
+.wx-willow-theme {
+  --wx-gantt-project-fill-color: var(--color-background-gray);
+  --wx-gantt-task-fill-color: var(--color-background-gray);
+}
+
+.gantt-bar-fill {
+  position: absolute;
+  inset: 0;
+  border-radius: var(--wx-gantt-bar-border-radius);
+}
+.gantt-bar-fill--info { background-color: var(--color-background-blue); }
+.gantt-bar-fill--success { background-color: var(--color-background-green); }
+.gantt-bar-fill--error { background-color: var(--color-background-red); }
+.gantt-bar-fill--neutral { background-color: var(--color-background-gray); }
