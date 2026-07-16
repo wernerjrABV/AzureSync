@@ -62,7 +62,7 @@ def test_list_work_items_default_envelope(client, db_conn):
         )
     db_conn.commit()
 
-    response = client.get("/api/work-items")
+    response = client.get(f"/api/work-items?area_path_id={area_path_id}")
 
     assert response.status_code == 200
     body = response.get_json()
@@ -70,8 +70,47 @@ def test_list_work_items_default_envelope(client, db_conn):
     assert body["data"][0]["id"] == 1
 
 
+def test_list_work_items_requires_area_path_id(client, db_conn):
+    response = client.get("/api/work-items")
+
+    assert response.status_code == 400
+    assert response.get_json() == {"error": "area_path_id is required"}
+
+
+def test_list_work_items_search_param(client, db_conn):
+    with db_conn.cursor() as cur:
+        cur.execute(
+            "INSERT INTO area_paths (organization, project, area_path) VALUES (%s, %s, %s) RETURNING id",
+            ("org", "proj", "proj\\A"),
+        )
+        area_path_id = cur.fetchone()[0]
+        cur.execute(
+            "INSERT INTO work_items (id, area_path_id, title, work_item_type, state, changed_date, raw_json) VALUES (1, %s, 'Login bug', 'Bug', 'Active', '2026-01-01T00:00:00', '{}')",
+            (area_path_id,),
+        )
+        cur.execute(
+            "INSERT INTO work_items (id, area_path_id, title, work_item_type, state, changed_date, raw_json) VALUES (2, %s, 'Export feature', 'Task', 'Active', '2026-01-01T00:00:00', '{}')",
+            (area_path_id,),
+        )
+    db_conn.commit()
+
+    response = client.get(f"/api/work-items?area_path_id={area_path_id}&search=login")
+
+    body = response.get_json()
+    assert body["pagination"]["total"] == 1
+    assert body["data"][0]["id"] == 1
+
+
 def test_list_work_items_rejects_invalid_order_by(client, db_conn):
-    response = client.get("/api/work-items?order_by=raw_json")
+    with db_conn.cursor() as cur:
+        cur.execute(
+            "INSERT INTO area_paths (organization, project, area_path) VALUES (%s, %s, %s) RETURNING id",
+            ("org", "proj", "proj\\A"),
+        )
+        area_path_id = cur.fetchone()[0]
+    db_conn.commit()
+
+    response = client.get(f"/api/work-items?area_path_id={area_path_id}&order_by=raw_json")
 
     assert response.status_code == 400
 
