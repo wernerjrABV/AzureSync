@@ -4,7 +4,6 @@ import { AppShell } from "@astryxdesign/core/AppShell";
 import { TopNav } from "@astryxdesign/core/TopNav";
 import { TopNavHeading } from "@astryxdesign/core/TopNav";
 import { SideNav } from "@astryxdesign/core/SideNav";
-import { SideNavHeading } from "@astryxdesign/core/SideNav";
 import { SideNavItem } from "@astryxdesign/core/SideNav";
 import { Banner } from "@astryxdesign/core/Banner";
 import WorkItemsListPage from "./pages/WorkItemsListPage";
@@ -20,11 +19,11 @@ export default function App() {
         topNav={
           <TopNav
             label="Main navigation"
-            heading={<TopNavHeading heading="Work Items" />}
+            heading={<TopNavHeading heading="Engineering Portfolio" />}
           />
         }
         sideNav={
-          <SideNav header={<SideNavHeading heading="Work Items" />}>
+          <SideNav>
             <SideNavItem label="Work Items" isSelected />
           </SideNav>
         }

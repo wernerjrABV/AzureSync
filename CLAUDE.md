@@ -2,6 +2,12 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## UI / Frontend Rule
+
+- Sempre use exclusivamente o design system Astryx e seus componentes.
+- Nunca crie ou introduza CSS estilizado manualmente, incluindo `styled-components`, `emotion`, CSS inline ou folhas de estilo customizadas quando houver alternativa no Astryx.
+- Se um padrão visual ainda não existir no Astryx, prefira compor a interface com componentes existentes do sistema em vez de criar estilo ad hoc.
+
 ## Monorepo layout
 
 This is an enterprise monorepo. See `docs/architecture/monorepo-architecture.md`

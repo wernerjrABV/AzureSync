@@ -2,6 +2,12 @@
 
 Codex guidance for this repo. Keep `docs/architecture/monorepo-architecture.md` in mind for the full picture.
 
+## UI / Frontend Rule
+
+- Sempre use exclusivamente o design system Astryx e seus componentes.
+- Nunca crie ou introduza CSS estilizado manualmente, incluindo `styled-components`, `emotion`, CSS inline ou folhas de estilo customizadas quando houver alternativa no Astryx.
+- Se um padrão visual ainda não existir no Astryx, prefira compor a interface com componentes existentes do sistema em vez de criar estilo ad hoc.
+
 ## Non-Negotiables
 
 - `apps/sync-service/` is the only database writer.
