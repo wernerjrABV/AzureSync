@@ -84,6 +84,39 @@ def list_work_items(
     return rows, total
 
 
+def get_work_item_details(
+    conn: psycopg.Connection, *, work_item_id: int
+) -> dict | None:
+    with conn.cursor(row_factory=dict_row) as cur:
+        cur.execute(
+            """
+            SELECT id, area_path_id, title, work_item_type, state, assigned_to,
+                   changed_date, parent_id, raw_json, synced_at, start_date,
+                   target_date, created_date, activated_date, closed_date
+            FROM work_items
+            WHERE id = %s
+            """,
+            (work_item_id,),
+        )
+        item = cur.fetchone()
+        if item is None:
+            return None
+
+        cur.execute(
+            """
+            SELECT work_item_id, area_path_id, rev, revised_by, revised_date,
+                   raw_json, synced_at
+            FROM work_item_history
+            WHERE work_item_id = %s
+            ORDER BY rev ASC
+            """,
+            (work_item_id,),
+        )
+        history = cur.fetchall()
+
+    return {"item": item, "history": history}
+
+
 def list_features_tree(conn: psycopg.Connection, *, area_path_id: int) -> list[dict]:
     with conn.cursor(row_factory=dict_row) as cur:
         cur.execute(

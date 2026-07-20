@@ -1,3 +1,5 @@
+import datetime
+
 from app import repository as repo
 
 
@@ -284,3 +286,81 @@ def test_list_features_tree_applies_same_closed_no_feature_rule_to_epics(db_conn
     rows = repo.list_features_tree(db_conn, area_path_id=ap1)
 
     assert [r["id"] for r in rows] == [1, 3, 4, 5]
+
+
+def test_get_work_item_details(db_conn):
+    area_path_id = _seed_area_path(db_conn)
+    with db_conn.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO work_items
+                (id, area_path_id, title, work_item_type, state, assigned_to,
+                 changed_date, parent_id, raw_json, synced_at, start_date,
+                 target_date, created_date, activated_date, closed_date)
+            VALUES
+                (42, %s, 'Current title', 'Bug', 'Active', 'Alice',
+                 '2026-07-10T12:00:00', 7,
+                 '{"fields": {"System.State": "Active"}}',
+                 '2026-07-10T12:01:00', '2026-07-01T00:00:00',
+                 '2026-08-01T00:00:00', '2026-06-01T00:00:00',
+                 '2026-06-02T00:00:00', NULL)
+            """,
+            (area_path_id,),
+        )
+        cur.execute(
+            """
+            INSERT INTO work_item_history
+                (work_item_id, area_path_id, rev, revised_by, revised_date, raw_json, synced_at)
+            VALUES
+                (42, %s, 2, 'bob@example.com', '2026-07-02T10:00:00',
+                 '{"rev": 2}', '2026-07-02T10:01:00'),
+                (42, %s, 1, 'alice@example.com', '2026-07-01T10:00:00',
+                 '{"rev": 1}', '2026-07-01T10:01:00')
+            """,
+            (area_path_id, area_path_id),
+        )
+    db_conn.commit()
+
+    details = repo.get_work_item_details(db_conn, work_item_id=42)
+
+    assert details["item"] == {
+        "id": 42,
+        "area_path_id": area_path_id,
+        "title": "Current title",
+        "work_item_type": "Bug",
+        "state": "Active",
+        "assigned_to": "Alice",
+        "changed_date": datetime.datetime(2026, 7, 10, 12, 0),
+        "parent_id": 7,
+        "raw_json": {"fields": {"System.State": "Active"}},
+        "synced_at": datetime.datetime(2026, 7, 10, 12, 1),
+        "start_date": datetime.datetime(2026, 7, 1),
+        "target_date": datetime.datetime(2026, 8, 1),
+        "created_date": datetime.datetime(2026, 6, 1),
+        "activated_date": datetime.datetime(2026, 6, 2),
+        "closed_date": None,
+    }
+    assert details["history"] == [
+        {
+            "work_item_id": 42,
+            "area_path_id": area_path_id,
+            "rev": 1,
+            "revised_by": "alice@example.com",
+            "revised_date": datetime.datetime(2026, 7, 1, 10, 0),
+            "raw_json": {"rev": 1},
+            "synced_at": datetime.datetime(2026, 7, 1, 10, 1),
+        },
+        {
+            "work_item_id": 42,
+            "area_path_id": area_path_id,
+            "rev": 2,
+            "revised_by": "bob@example.com",
+            "revised_date": datetime.datetime(2026, 7, 2, 10, 0),
+            "raw_json": {"rev": 2},
+            "synced_at": datetime.datetime(2026, 7, 2, 10, 1),
+        },
+    ]
+
+
+def test_get_work_item_details_returns_none_for_missing_item(db_conn):
+    assert repo.get_work_item_details(db_conn, work_item_id=999) is None
