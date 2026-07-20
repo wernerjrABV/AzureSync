@@ -78,6 +78,14 @@ def create_app(conn_factory=db.get_connection) -> Flask:
             }
         )
 
+    @app.route("/api/work-items/<int:work_item_id>", methods=["GET"])
+    def get_work_item_details(work_item_id):
+        conn = conn_factory()
+        details = repo.get_work_item_details(conn, work_item_id=work_item_id)
+        if details is None:
+            return jsonify({"error": "work item not found"}), 404
+        return jsonify({"data": details})
+
     @app.route("/api/features-tree", methods=["GET"])
     def list_features_tree():
         area_path_id = request.args.get("area_path_id", type=int)

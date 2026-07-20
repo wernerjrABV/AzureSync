@@ -9,6 +9,31 @@ export interface WorkItem {
   parent_id: number | null;
 }
 
+export interface WorkItemDetailItem extends WorkItem {
+  raw_json: unknown;
+  synced_at: string | null;
+  start_date: string | null;
+  target_date: string | null;
+  created_date: string | null;
+  activated_date: string | null;
+  closed_date: string | null;
+}
+
+export interface WorkItemHistoryRevision {
+  work_item_id: number;
+  area_path_id: number;
+  rev: number;
+  revised_by: string | null;
+  revised_date: string | null;
+  raw_json: unknown;
+  synced_at: string | null;
+}
+
+export interface WorkItemDetails {
+  item: WorkItemDetailItem;
+  history: WorkItemHistoryRevision[];
+}
+
 export interface PaginatedResponse<T> {
   data: T[];
   pagination: {

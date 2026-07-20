@@ -1,16 +1,21 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { KeyboardEvent } from "react";
 import { Card } from "@astryxdesign/core/Layout";
-import { HStack } from "@astryxdesign/core/Layout";
+import { HStack, VStack } from "@astryxdesign/core/Layout";
 import { Selector } from "@astryxdesign/core/Selector";
 import { TextInput } from "@astryxdesign/core/TextInput";
 import { Table, proportional, pixel } from "@astryxdesign/core/Table";
+import type { TablePlugin } from "@astryxdesign/core/Table";
 import { Pagination } from "@astryxdesign/core/Pagination";
 import { Banner } from "@astryxdesign/core/Banner";
 import { EmptyState } from "@astryxdesign/core/EmptyState";
 import { Spinner } from "@astryxdesign/core/Spinner";
 import { Badge } from "@astryxdesign/core/Badge";
-import { fetchWorkItems, fetchAreaPaths } from "../services/apiReadClient";
-import type { WorkItem } from "../models/workItem";
+import { Dialog, DialogHeader } from "@astryxdesign/core/Dialog";
+import { CodeBlock } from "@astryxdesign/core/CodeBlock";
+import { Text } from "@astryxdesign/core/Text";
+import { fetchWorkItemDetails, fetchWorkItems, fetchAreaPaths } from "../services/apiReadClient";
+import type { WorkItem, WorkItemDetails } from "../models/workItem";
 import type { AreaPath } from "../models/areaPath";
 
 type WorkItemRow = WorkItem & Record<string, unknown>;
@@ -18,6 +23,14 @@ type WorkItemRow = WorkItem & Record<string, unknown>;
 const PAGE_SIZE = 50;
 const SEARCH_DEBOUNCE_MS = 350;
 const SEARCH_MIN_LENGTH = 3;
+
+function displayDetailValue(value: string | number | null): string {
+  return value === null ? "—" : String(value);
+}
+
+function formatJson(value: unknown): string {
+  return JSON.stringify(value, null, 2) ?? "—";
+}
 
 export default function WorkItemsListPage() {
   const [areaPaths, setAreaPaths] = useState<AreaPath[]>([]);
@@ -30,7 +43,12 @@ export default function WorkItemsListPage() {
   const [search, setSearch] = useState<string>("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [selectedItemId, setSelectedItemId] = useState<number | null>(null);
+  const [details, setDetails] = useState<WorkItemDetails | null>(null);
+  const [detailsLoading, setDetailsLoading] = useState(false);
+  const [detailsError, setDetailsError] = useState<string | null>(null);
   const latestRequestId = useRef(0);
+  const latestDetailsRequestId = useRef(0);
 
   useEffect(() => {
     const handle = setTimeout(() => {
@@ -88,6 +106,61 @@ export default function WorkItemsListPage() {
         }
       });
   }, [areaPathId, search, page]);
+
+  const handleRowClick = useCallback((id: number) => {
+    const requestId = ++latestDetailsRequestId.current;
+    setSelectedItemId(id);
+    setDetails(null);
+    setDetailsError(null);
+    setDetailsLoading(true);
+    fetchWorkItemDetails(id)
+      .then((response) => {
+        if (requestId === latestDetailsRequestId.current) {
+          setDetails(response);
+        }
+      })
+      .catch((err: Error) => {
+        if (requestId === latestDetailsRequestId.current) {
+          setDetailsError(err.message);
+        }
+      })
+      .finally(() => {
+        if (requestId === latestDetailsRequestId.current) {
+          setDetailsLoading(false);
+        }
+      });
+  }, []);
+
+  const closeDetails = useCallback(() => {
+    ++latestDetailsRequestId.current;
+    setSelectedItemId(null);
+    setDetails(null);
+    setDetailsError(null);
+    setDetailsLoading(false);
+  }, []);
+
+  const handleRowKeyDown = useCallback((event: KeyboardEvent<HTMLTableRowElement>, id: number) => {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      handleRowClick(id);
+    }
+  }, [handleRowClick]);
+
+  const rowClickPlugin = useMemo<TablePlugin<WorkItemRow>>(
+    () => ({
+      transformBodyRow: (props, item) => ({
+        ...props,
+        htmlProps: {
+          ...props.htmlProps,
+          onClick: () => handleRowClick(item.id),
+          onKeyDown: (event) => handleRowKeyDown(event, item.id),
+          tabIndex: 0,
+          "aria-label": `Open work item ${item.id} details`,
+        },
+      }),
+    }),
+    [handleRowClick, handleRowKeyDown],
+  );
 
   return (
     <Card>
@@ -150,6 +223,7 @@ export default function WorkItemsListPage() {
             density="balanced"
             dividers="rows"
             hasHover
+            plugins={{ rowClick: rowClickPlugin }}
             columns={[
               { key: "id", header: "ID", width: pixel(80) },
               { key: "title", header: "Title", width: proportional(3) },
@@ -176,6 +250,81 @@ export default function WorkItemsListPage() {
           />
         </>
       )}
+
+      <Dialog
+        isOpen={selectedItemId !== null}
+        onOpenChange={(isOpen) => !isOpen && closeDetails()}
+        width={630}
+        maxHeight="100vh"
+        position={{ top: 0, right: 0, bottom: 0 }}
+        className="roadmap-details-drawer"
+      >
+        <DialogHeader
+          title="Work item details"
+          onOpenChange={(isOpen) => !isOpen && closeDetails()}
+        />
+        {detailsLoading && <Spinner label="Loading work item details" />}
+        {detailsError && (
+          <Banner
+            status="error"
+            title="Error loading work item details"
+            description={detailsError}
+          />
+        )}
+        {details && (
+          <VStack gap={4}>
+            <VStack gap={2}>
+              <Text as="div" weight="semibold">Current fields</Text>
+              <Text>ID: {String(details.item.id)}</Text>
+              <Text>Title: {displayDetailValue(details.item.title)}</Text>
+              <Text>Area path ID: {String(details.item.area_path_id)}</Text>
+              <Text>Work item type: {displayDetailValue(details.item.work_item_type)}</Text>
+              <Text>State: {displayDetailValue(details.item.state)}</Text>
+              <Text>Assigned to: {displayDetailValue(details.item.assigned_to)}</Text>
+              <Text>Changed date: {displayDetailValue(details.item.changed_date)}</Text>
+              <Text>Parent ID: {displayDetailValue(details.item.parent_id)}</Text>
+              <Text>Synced at: {displayDetailValue(details.item.synced_at)}</Text>
+              <Text>Start date: {displayDetailValue(details.item.start_date)}</Text>
+              <Text>Target date: {displayDetailValue(details.item.target_date)}</Text>
+              <Text>Created date: {displayDetailValue(details.item.created_date)}</Text>
+              <Text>Activated date: {displayDetailValue(details.item.activated_date)}</Text>
+              <Text>Closed date: {displayDetailValue(details.item.closed_date)}</Text>
+            </VStack>
+
+            <VStack gap={2}>
+              <Text as="div" weight="semibold">Raw JSON</Text>
+              <CodeBlock
+                aria-label="Current raw JSON"
+                code={formatJson(details.item.raw_json)}
+                language="json"
+                hasCopyButton={false}
+                width="100%"
+              />
+            </VStack>
+
+            <VStack gap={3}>
+              <Text as="div" weight="semibold">History</Text>
+              {details.history.map((revision) => (
+                <VStack key={`${revision.work_item_id}-${revision.rev}`} gap={2}>
+                  <Text as="div" weight="semibold">Revision {String(revision.rev)}</Text>
+                  <Text>Work item ID: {String(revision.work_item_id)}</Text>
+                  <Text>Area path ID: {String(revision.area_path_id)}</Text>
+                  <Text>Revised by: {displayDetailValue(revision.revised_by)}</Text>
+                  <Text>Revised date: {displayDetailValue(revision.revised_date)}</Text>
+                  <Text>Synced at: {displayDetailValue(revision.synced_at)}</Text>
+                  <CodeBlock
+                    aria-label={`Revision ${revision.rev} raw JSON`}
+                    code={formatJson(revision.raw_json)}
+                    language="json"
+                    hasCopyButton={false}
+                    width="100%"
+                  />
+                </VStack>
+              ))}
+            </VStack>
+          </VStack>
+        )}
+      </Dialog>
     </Card>
   );
 }
