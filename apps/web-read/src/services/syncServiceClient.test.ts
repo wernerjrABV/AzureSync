@@ -46,7 +46,7 @@ describe("syncServiceClient", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     await expect(fetchSyncAreaPaths()).resolves.toEqual([areaPath]);
-    expect(fetchMock).toHaveBeenCalledWith("http://127.0.0.1:5000/api/area-paths");
+    expect(fetchMock).toHaveBeenCalledWith("http://127.0.0.1:5001/api/area-paths");
   });
 
   test("creates an area path with a JSON body", async () => {
@@ -56,7 +56,7 @@ describe("syncServiceClient", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     await expect(createSyncAreaPath(input)).resolves.toEqual(areaPath);
-    expect(fetchMock).toHaveBeenCalledWith("http://127.0.0.1:5000/api/area-paths", {
+    expect(fetchMock).toHaveBeenCalledWith("http://127.0.0.1:5001/api/area-paths", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(input),
@@ -70,7 +70,7 @@ describe("syncServiceClient", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     await expect(updateSyncAreaPath(7, input)).resolves.toEqual(areaPath);
-    expect(fetchMock).toHaveBeenCalledWith("http://127.0.0.1:5000/api/area-paths/7", {
+    expect(fetchMock).toHaveBeenCalledWith("http://127.0.0.1:5001/api/area-paths/7", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(input),
@@ -82,7 +82,7 @@ describe("syncServiceClient", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     await expect(deleteSyncAreaPath(7)).resolves.toBeUndefined();
-    expect(fetchMock).toHaveBeenCalledWith("http://127.0.0.1:5000/api/area-paths/7", {
+    expect(fetchMock).toHaveBeenCalledWith("http://127.0.0.1:5001/api/area-paths/7", {
       method: "DELETE",
     });
   });
@@ -94,7 +94,7 @@ describe("syncServiceClient", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     await expect(startAreaPathSync(7)).resolves.toBeUndefined();
-    expect(fetchMock).toHaveBeenCalledWith("http://127.0.0.1:5000/api/area-paths/7/sync", {
+    expect(fetchMock).toHaveBeenCalledWith("http://127.0.0.1:5001/api/area-paths/7/sync", {
       method: "POST",
     });
   });

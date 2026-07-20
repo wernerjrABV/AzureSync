@@ -20,7 +20,13 @@ class InvalidQueryParam(ValueError):
 def list_area_paths(conn: psycopg.Connection) -> list[dict]:
     with conn.cursor(row_factory=dict_row) as cur:
         cur.execute(
-            "SELECT id, organization, project, area_path FROM area_paths ORDER BY id"
+            """
+            SELECT id, organization, project, area_path, incluir_subpaths, ativo,
+                   intervalo_minutos, is_running, last_sync_at, last_sync_status,
+                   last_sync_count, last_error_msg, created_at, history_loaded_at
+            FROM area_paths
+            ORDER BY id
+            """
         )
         return cur.fetchall()
 

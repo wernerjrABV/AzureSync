@@ -1,9 +1,16 @@
 from datetime import datetime
+from contextlib import contextmanager
+from urllib.error import HTTPError
 
 import pytest
 
 from app import repository as repo
 from app.routes import create_app
+from app.sync_service_client import (
+    SyncServiceClient,
+    SyncServiceResponse,
+    SyncServiceUnavailable,
+)
 
 
 @pytest.fixture
@@ -46,6 +53,169 @@ def test_list_area_paths(client, db_conn):
     assert response.status_code == 200
     body = response.get_json()
     assert body[0]["area_path"] == "proj\\A"
+
+
+def test_create_area_path_forwards_json_to_sync_service():
+    class RecordingSyncServiceClient:
+        def __init__(self):
+            self.calls = []
+
+        def request(self, method, path, json_body=None):
+            self.calls.append((method, path, json_body))
+            return SyncServiceResponse(
+                status_code=201,
+                json_body={"data": {"id": 17, **json_body}},
+            )
+
+    sync_service_client = RecordingSyncServiceClient()
+    app = create_app(
+        conn_factory=lambda: None,
+        sync_service_client=sync_service_client,
+    )
+    app.config["TESTING"] = True
+    payload = {"organization": "org", "project": "proj", "area_path": "proj\\A"}
+
+    with app.test_client() as test_client:
+        response = test_client.post("/api/area-paths", json=payload)
+
+    assert response.status_code == 201
+    assert response.get_json() == {"data": {"id": 17, **payload}}
+    assert sync_service_client.calls == [("POST", "/api/area-paths", payload)]
+
+
+@pytest.mark.parametrize(
+    ("method", "path", "payload", "upstream_status", "upstream_body"),
+    [
+        (
+            "PUT",
+            "/api/area-paths/7",
+            {"organization": "org", "project": "proj", "area_path": "proj\\B"},
+            404,
+            {"error": "area path not found"},
+        ),
+        (
+            "DELETE",
+            "/api/area-paths/7",
+            None,
+            204,
+            None,
+        ),
+        (
+            "POST",
+            "/api/area-paths/7/sync",
+            None,
+            202,
+            {"status": "started"},
+        ),
+        (
+            "POST",
+            "/api/area-paths/7/sync",
+            None,
+            409,
+            {"error": "sync already running"},
+        ),
+        (
+            "POST",
+            "/api/area-paths/7/sync",
+            None,
+            502,
+            {"error": "upstream sync failed"},
+        ),
+    ],
+)
+def test_area_path_mutations_forward_upstream_status_and_json_verbatim(
+    method, path, payload, upstream_status, upstream_body
+):
+    class StaticSyncServiceClient:
+        def __init__(self):
+            self.calls = []
+
+        def request(self, request_method, request_path, json_body=None):
+            self.calls.append((request_method, request_path, json_body))
+            return SyncServiceResponse(upstream_status, upstream_body)
+
+    sync_service_client = StaticSyncServiceClient()
+    app = create_app(
+        conn_factory=lambda: None,
+        sync_service_client=sync_service_client,
+    )
+    app.config["TESTING"] = True
+
+    with app.test_client() as test_client:
+        response = test_client.open(path, method=method, json=payload)
+
+    assert response.status_code == upstream_status
+    assert response.get_json() == upstream_body
+    assert sync_service_client.calls == [(method, path, payload)]
+
+
+def test_area_path_write_returns_503_when_sync_service_is_unavailable():
+    class UnavailableSyncServiceClient:
+        def request(self, *_args, **_kwargs):
+            raise SyncServiceUnavailable()
+
+    app = create_app(
+        conn_factory=lambda: None,
+        sync_service_client=UnavailableSyncServiceClient(),
+    )
+    app.config["TESTING"] = True
+
+    with app.test_client() as test_client:
+        response = test_client.post(
+            "/api/area-paths",
+            json={"organization": "org", "project": "proj", "area_path": "proj\\A"},
+        )
+
+    assert response.status_code == 503
+    assert response.get_json() == {"error": "sync service unavailable"}
+
+
+def test_cors_preflight_allows_area_path_write_methods():
+    app = create_app(conn_factory=lambda: None)
+    app.config["TESTING"] = True
+
+    with app.test_client() as test_client:
+        response = test_client.options(
+            "/api/area-paths",
+            headers={"Origin": "http://localhost:5173"},
+        )
+
+    assert response.status_code == 200
+    assert response.headers["Access-Control-Allow-Origin"] == "http://localhost:5173"
+    assert response.headers["Access-Control-Allow-Methods"] == "GET, POST, PUT, DELETE, OPTIONS"
+
+
+def test_sync_service_client_posts_json_to_configured_base_url(monkeypatch):
+    captured = {}
+
+    class FakeHTTPResponse:
+        status = 202
+
+        def read(self):
+            return b'{"status": "started"}'
+
+    @contextmanager
+    def fake_urlopen(request):
+        captured["url"] = request.full_url
+        captured["method"] = request.method
+        captured["data"] = request.data
+        captured["content_type"] = request.headers["Content-type"]
+        yield FakeHTTPResponse()
+
+    monkeypatch.setattr("app.sync_service_client.urlopen", fake_urlopen)
+    client = SyncServiceClient("http://sync-service:5000/")
+
+    response = client.request(
+        "POST", "/api/area-paths", {"organization": "org", "project": "proj"}
+    )
+
+    assert response == SyncServiceResponse(202, {"status": "started"})
+    assert captured == {
+        "url": "http://sync-service:5000/api/area-paths",
+        "method": "POST",
+        "data": b'{"organization": "org", "project": "proj"}',
+        "content_type": "application/json",
+    }
 
 
 def test_list_work_items_default_envelope(client, db_conn):

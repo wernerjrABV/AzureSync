@@ -9,10 +9,11 @@ import { SideNavItem } from "@astryxdesign/core/SideNav";
 import { Banner } from "@astryxdesign/core/Banner";
 import WorkItemsListPage from "./pages/WorkItemsListPage";
 import FeaturesRoadmapPage from "./pages/FeaturesRoadmapPage";
+import SynchronizationPage from "./pages/SynchronizationPage";
 
 const INFO_MESSAGE = "";
 
-type Page = "work-items" | "features-roadmap";
+type Page = "work-items" | "features-roadmap" | "synchronization";
 
 export default function App() {
   const [page, setPage] = useState<Page>("work-items");
@@ -42,13 +43,25 @@ export default function App() {
               isSelected={page === "features-roadmap"}
               onClick={() => setPage("features-roadmap")}
             />
+            <SideNavItem
+              label="Synchronization"
+              icon="wrench"
+              isSelected={page === "synchronization"}
+              onClick={() => setPage("synchronization")}
+            />
           </SideNav>
         }
         banner={
           INFO_MESSAGE ? <Banner status="info" title={INFO_MESSAGE} /> : undefined
         }
       >
-        {page === "work-items" ? <WorkItemsListPage /> : <FeaturesRoadmapPage />}
+        {page === "work-items" ? (
+          <WorkItemsListPage />
+        ) : page === "features-roadmap" ? (
+          <FeaturesRoadmapPage />
+        ) : (
+          <SynchronizationPage />
+        )}
       </AppShell>
     </Theme>
   );

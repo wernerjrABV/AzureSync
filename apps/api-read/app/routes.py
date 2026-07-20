@@ -5,6 +5,7 @@ from flask.json.provider import DefaultJSONProvider
 
 from app import db, repository as repo
 from app.config import get_cors_allowed_origins
+from app.sync_service_client import SyncServiceClient, SyncServiceUnavailable
 
 
 class ISODateJSONProvider(DefaultJSONProvider):
@@ -26,8 +27,9 @@ class ISODateJSONProvider(DefaultJSONProvider):
         return DefaultJSONProvider.default(obj)
 
 
-def create_app(conn_factory=db.get_connection) -> Flask:
+def create_app(conn_factory=db.get_connection, sync_service_client=None) -> Flask:
     app = Flask(__name__)
+    sync_service_client = sync_service_client or SyncServiceClient()
 
     def open_connection():
         conn = conn_factory()
@@ -46,8 +48,17 @@ def create_app(conn_factory=db.get_connection) -> Flask:
         origin = request.headers.get("Origin")
         if origin in get_cors_allowed_origins():
             response.headers["Access-Control-Allow-Origin"] = origin
-            response.headers["Access-Control-Allow-Methods"] = "GET"
+            response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
         return response
+
+    def forward_to_sync_service(method: str, path: str, json_body=None):
+        try:
+            upstream = sync_service_client.request(method, path, json_body)
+        except SyncServiceUnavailable:
+            return jsonify({"error": "sync service unavailable"}), 503
+        if upstream.json_body is None:
+            return "", upstream.status_code
+        return jsonify(upstream.json_body), upstream.status_code
 
     @app.route("/health", methods=["GET"])
     def health():
@@ -58,6 +69,31 @@ def create_app(conn_factory=db.get_connection) -> Flask:
         conn = open_connection()
         rows = repo.list_area_paths(conn)
         return jsonify(rows)
+
+    @app.route("/api/area-paths", methods=["POST"])
+    def create_area_path():
+        return forward_to_sync_service(
+            "POST", "/api/area-paths", request.get_json(silent=True)
+        )
+
+    @app.route("/api/area-paths/<int:area_path_id>", methods=["PUT"])
+    def update_area_path(area_path_id):
+        return forward_to_sync_service(
+            "PUT",
+            f"/api/area-paths/{area_path_id}",
+            request.get_json(silent=True),
+        )
+
+    @app.route("/api/area-paths/<int:area_path_id>", methods=["DELETE"])
+    def delete_area_path(area_path_id):
+        return forward_to_sync_service("DELETE", f"/api/area-paths/{area_path_id}")
+
+    @app.route("/api/area-paths/<int:area_path_id>/sync", methods=["POST"])
+    def sync_area_path(area_path_id):
+        return forward_to_sync_service(
+            "POST", f"/api/area-paths/{area_path_id}/sync"
+        )
+
 
     @app.route("/api/work-items", methods=["GET"])
     def list_work_items():
