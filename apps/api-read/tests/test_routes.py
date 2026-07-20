@@ -1,3 +1,5 @@
+from datetime import datetime
+
 import pytest
 
 from app import repository as repo
@@ -204,7 +206,10 @@ def test_get_work_item_details(client, db_conn):
     response = client.get("/api/work-items/42")
 
     assert response.status_code == 200
-    assert response.get_json() == {
+    body = response.get_json()
+    item_synced_at = body["data"]["item"].pop("synced_at")
+    history_synced_at = body["data"]["history"][0].pop("synced_at")
+    assert body == {
         "data": {
             "item": {
                 "id": 42,
@@ -216,7 +221,6 @@ def test_get_work_item_details(client, db_conn):
                 "changed_date": "2026-07-10T12:00:00",
                 "parent_id": None,
                 "raw_json": {},
-                "synced_at": None,
                 "start_date": None,
                 "target_date": None,
                 "created_date": None,
@@ -231,11 +235,12 @@ def test_get_work_item_details(client, db_conn):
                     "revised_by": "alice@example.com",
                     "revised_date": "2026-07-01T10:00:00",
                     "raw_json": {"rev": 1},
-                    "synced_at": None,
                 }
             ],
         }
     }
+    assert datetime.fromisoformat(item_synced_at)
+    assert datetime.fromisoformat(history_synced_at)
 
 
 def test_get_work_item_details_not_found(client):
