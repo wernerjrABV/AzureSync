@@ -1,4 +1,8 @@
-import type { WorkItem, PaginatedResponse } from "../models/workItem";
+import type {
+  WorkItem,
+  WorkItemDetails,
+  PaginatedResponse,
+} from "../models/workItem";
 import type { AreaPath } from "../models/areaPath";
 import type { FeatureTreeItem } from "../models/feature";
 
@@ -29,6 +33,15 @@ export async function fetchWorkItems(
     throw new Error(`Failed to fetch work items: ${response.status}`);
   }
   return response.json();
+}
+
+export async function fetchWorkItemDetails(id: number): Promise<WorkItemDetails> {
+  const response = await fetch(`${BASE_URL}/api/work-items/${encodeURIComponent(String(id))}`);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch work item details: ${response.status}`);
+  }
+  const body = await response.json();
+  return body.data;
 }
 
 export async function fetchAreaPaths(): Promise<AreaPath[]> {
