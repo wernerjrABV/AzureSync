@@ -1,0 +1,102 @@
+export interface SyncAreaPath {
+  id: number;
+  organization: string;
+  project: string;
+  area_path: string;
+  incluir_subpaths: boolean;
+  ativo: boolean;
+  intervalo_minutos: number;
+  is_running: boolean;
+  last_sync_at: string | null;
+  last_sync_status: string | null;
+  last_sync_count: number | null;
+  last_error_msg: string | null;
+  created_at: string;
+  history_loaded_at: string | null;
+}
+
+export interface AreaPathInput {
+  organization: string;
+  project: string;
+  area_path: string;
+  incluir_subpaths: boolean;
+  ativo: boolean;
+  intervalo_minutos: number;
+}
+
+const BASE_URL =
+  import.meta.env.VITE_SYNC_SERVICE_BASE_URL ?? "http://127.0.0.1:5000";
+
+interface DataResponse<T> {
+  data: T;
+}
+
+async function request<T>(path: string, options?: RequestInit): Promise<T> {
+  const response = options
+    ? await fetch(`${BASE_URL}${path}`, options)
+    : await fetch(`${BASE_URL}${path}`);
+
+  if (!response.ok) {
+    let detail = "";
+    try {
+      const body = await response.json();
+      if (body && typeof body.error === "string") {
+        detail = `: ${body.error}`;
+      }
+    } catch {
+      // The status code is still useful when the error response is not JSON.
+    }
+    throw new Error(`Sync service request failed: ${response.status}${detail}`);
+  }
+
+  if (response.status === 204) {
+    return undefined as T;
+  }
+
+  return response.json() as Promise<T>;
+}
+
+function jsonOptions(method: "POST" | "PUT", body: AreaPathInput): RequestInit {
+  return {
+    method,
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  };
+}
+
+export async function fetchSyncAreaPaths(): Promise<SyncAreaPath[]> {
+  const response = await request<DataResponse<SyncAreaPath[]>>("/api/area-paths");
+  return response.data;
+}
+
+export async function createSyncAreaPath(input: AreaPathInput): Promise<SyncAreaPath> {
+  const response = await request<DataResponse<SyncAreaPath>>(
+    "/api/area-paths",
+    jsonOptions("POST", input)
+  );
+  return response.data;
+}
+
+export async function updateSyncAreaPath(
+  id: number,
+  input: AreaPathInput
+): Promise<SyncAreaPath> {
+  const response = await request<DataResponse<SyncAreaPath>>(
+    `/api/area-paths/${encodeURIComponent(String(id))}`,
+    jsonOptions("PUT", input)
+  );
+  return response.data;
+}
+
+export async function deleteSyncAreaPath(id: number): Promise<void> {
+  await request<void>(`/api/area-paths/${encodeURIComponent(String(id))}`, {
+    method: "DELETE",
+  });
+}
+
+export async function startAreaPathSync(id: number): Promise<void> {
+  await request<{ status: "started" }>(
+    `/api/area-paths/${encodeURIComponent(String(id))}/sync`,
+    { method: "POST" }
+  );
+}
