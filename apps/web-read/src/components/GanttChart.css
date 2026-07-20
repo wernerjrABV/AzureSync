@@ -43,6 +43,9 @@
   top: 0;
   bottom: 0;
   border-radius: var(--wx-gantt-bar-border-radius);
+  /* SVAR rounds each task's x/width independently. Extend the fill by one
+     pixel so a shared target date is not displayed as an early stop. */
+  margin-right: -1px;
 }
 
 /* Full-box fill: spans the entire bar so the base SVAR bar never shows. */
