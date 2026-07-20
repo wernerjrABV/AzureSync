@@ -49,6 +49,7 @@ def create_app(conn_factory=db.get_connection, sync_service_client=None) -> Flas
         if origin in get_cors_allowed_origins():
             response.headers["Access-Control-Allow-Origin"] = origin
             response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
+            response.headers["Access-Control-Allow-Headers"] = "Content-Type"
         return response
 
     def forward_to_sync_service(method: str, path: str, json_body=None):

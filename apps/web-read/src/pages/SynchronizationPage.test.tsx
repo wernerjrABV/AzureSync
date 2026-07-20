@@ -208,6 +208,32 @@ describe("SynchronizationPage", () => {
     expect(screen.getByText("Last sync count: 0")).toBeInTheDocument();
   });
 
+  test("formats synchronization intervals as hours and minutes", async () => {
+    mockInitialLoad([{ ...areaPath, intervalo_minutos: 270 }]);
+
+    renderPage();
+
+    await screen.findByText("Intake\\Platform");
+    expect(screen.getByText("Every 4h 30m")).toBeInTheDocument();
+  });
+
+  test("starts all available area paths while keeping each card state individual", async () => {
+    const secondAreaPath = { ...areaPath, id: 8, area_path: "Intake\\Mobile" };
+    vi.mocked(syncServiceClient.fetchSyncAreaPaths).mockResolvedValue([areaPath, secondAreaPath]);
+    vi.mocked(syncServiceClient.startAreaPathSync).mockResolvedValue(undefined);
+
+    renderPage();
+    await screen.findByText("Intake\\Mobile");
+
+    fireEvent.click(screen.getByRole("button", { name: "Synchronize all" }));
+
+    await waitFor(() => {
+      expect(syncServiceClient.startAreaPathSync).toHaveBeenCalledWith(7);
+      expect(syncServiceClient.startAreaPathSync).toHaveBeenCalledWith(8);
+    });
+    expect(screen.getAllByText("Running")).toHaveLength(2);
+  });
+
   test("reuses the form dialog to edit an area path", async () => {
     mockInitialLoad();
     vi.mocked(syncServiceClient.updateSyncAreaPath).mockResolvedValue({
@@ -281,6 +307,25 @@ describe("SynchronizationPage", () => {
     if (status === "error") {
       expect(screen.getByText("Azure DevOps is unavailable")).toBeInTheDocument();
     }
+  });
+
+  test("optimistically marks the card as running and disables all actions until sync finishes", async () => {
+    const startRequest = deferred<void>();
+    vi.mocked(syncServiceClient.fetchSyncAreaPaths).mockResolvedValue([areaPath]);
+    vi.mocked(syncServiceClient.startAreaPathSync).mockReturnValue(startRequest.promise);
+
+    renderPage();
+    await screen.findByText("Intake\\Platform");
+
+    fireEvent.click(screen.getByRole("button", { name: "Synchronize Intake\\Platform" }));
+
+    expect(screen.getByText("Running")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Synchronize Intake\\Platform" })).toHaveAttribute("aria-disabled", "true");
+    expect(screen.getByRole("button", { name: "Edit Intake\\Platform" })).toHaveAttribute("aria-disabled", "true");
+    expect(screen.getByRole("button", { name: "Delete Intake\\Platform" })).toHaveAttribute("aria-disabled", "true");
+
+    startRequest.resolve();
+    await act(async () => {});
   });
 
   test("keeps polling after the first post-202 refresh still reports the previous final status", async () => {

@@ -77,6 +77,19 @@ function statusVariant(status: string | null): "neutral" | "success" | "warning"
   return "neutral";
 }
 
+function formatInterval(minutes: number): string {
+  const hours = Math.floor(minutes / 60);
+  const remainingMinutes = minutes % 60;
+
+  if (hours === 0) {
+    return `${remainingMinutes} min`;
+  }
+  if (remainingMinutes === 0) {
+    return `${hours}h`;
+  }
+  return `${hours}h ${remainingMinutes}m`;
+}
+
 function StatusMessage({ areaPath }: { areaPath: SyncAreaPath }) {
   if (areaPath.last_sync_status === "ok") {
     return (
@@ -182,10 +195,20 @@ export default function SynchronizationPage() {
         const areaPath = nextAreaPaths.find((candidate) => candidate.id === areaPathId);
         if (!areaPath) {
           pollingIds.current.delete(areaPathId);
+          setStartingIds((current) => {
+            const next = new Set(current);
+            next.delete(areaPathId);
+            return next;
+          });
         } else if (areaPath.is_running) {
           pollingIds.current.set(areaPathId, true);
         } else if (hasObservedRunning && areaPath.last_sync_status !== null) {
           pollingIds.current.delete(areaPathId);
+          setStartingIds((current) => {
+            const next = new Set(current);
+            next.delete(areaPathId);
+            return next;
+          });
         }
       }
     }
@@ -277,6 +300,11 @@ export default function SynchronizationPage() {
 
   const handleStartSync = async (areaPathId: number) => {
     setStartingIds((current) => new Set(current).add(areaPathId));
+    setAreaPaths((current) => current.map((areaPath) => (
+      areaPath.id === areaPathId
+        ? { ...areaPath, is_running: true }
+        : areaPath
+    )));
     setError(null);
     try {
       await startAreaPathSync(areaPathId);
@@ -284,9 +312,14 @@ export default function SynchronizationPage() {
       await poll();
     } catch (requestError) {
       stopPolling(areaPathId);
+      setAreaPaths((current) => current.map((areaPath) => (
+        areaPath.id === areaPathId
+          ? { ...areaPath, is_running: false }
+          : areaPath
+      )));
       setError(errorMessage(requestError));
     } finally {
-      if (isMounted.current) {
+      if (isMounted.current && !pollingIds.current.has(areaPathId)) {
         setStartingIds((current) => {
           const next = new Set(current);
           next.delete(areaPathId);
@@ -296,6 +329,18 @@ export default function SynchronizationPage() {
     }
   };
 
+  const handleStartAllSyncs = async () => {
+    const availableAreaPathIds = areaPaths
+      .filter((areaPath) => !areaPath.is_running && !startingIds.has(areaPath.id))
+      .map((areaPath) => areaPath.id);
+
+    await Promise.all(availableAreaPathIds.map((areaPathId) => handleStartSync(areaPathId)));
+  };
+
+  const hasAvailableAreaPaths = areaPaths.some(
+    (areaPath) => !areaPath.is_running && !startingIds.has(areaPath.id),
+  );
+
   const isFormOpen = editingAreaPath !== undefined;
   const isEditing = editingAreaPath !== null && editingAreaPath !== undefined;
 
@@ -303,7 +348,15 @@ export default function SynchronizationPage() {
     <VStack gap={4}>
       <HStack justify="between" align="center" wrap="wrap">
         <Text as="h1" type="display-3">Synchronization</Text>
-        <Button label="Add area path" variant="primary" onClick={openCreateDialog} />
+        <HStack gap={2} wrap="wrap">
+          <Button
+            label="Synchronize all"
+            variant="primary"
+            isDisabled={!hasAvailableAreaPaths}
+            onClick={() => void handleStartAllSyncs()}
+          />
+          <Button label="Add area path" variant="primary" onClick={openCreateDialog} />
+        </HStack>
       </HStack>
 
       {error && <Banner status="error" title="Synchronization management error" description={error} />}
@@ -326,22 +379,22 @@ export default function SynchronizationPage() {
         >
           {areaPaths.map((areaPath) => (
             <Card key={areaPath.id} padding={3} height="100%">
-              <VStack gap={3} height="100%" justify="between">
+                <VStack gap={3} height="100%" justify="between">
                 <VStack gap={1}>
-                    <HStack justify="between" align="center" wrap="wrap">
-                      <Text as="h2" type="large" weight="semibold">{areaPath.area_path}</Text>
+                    <HStack justify="end" align="center">
                       <Badge
                         variant={areaPath.ativo ? "success" : "neutral"}
                         label={areaPath.ativo ? "Active" : "Inactive"}
                       />
                     </HStack>
+                    <Text as="h2" type="large" weight="semibold">{areaPath.area_path}</Text>
                     <Text type="supporting">{areaPath.organization} / {areaPath.project}</Text>
                     <HStack gap={2} align="center" wrap="wrap">
                       <Badge
-                        variant={areaPath.is_running ? "warning" : statusVariant(areaPath.last_sync_status)}
-                        label={areaPath.is_running ? "Running" : areaPath.last_sync_status ?? "Not synchronized"}
+                        variant={areaPath.is_running || startingIds.has(areaPath.id) ? "warning" : statusVariant(areaPath.last_sync_status)}
+                        label={areaPath.is_running || startingIds.has(areaPath.id) ? "Running" : areaPath.last_sync_status ?? "Not synchronized"}
                       />
-                      <Text type="supporting">Every {areaPath.intervalo_minutos} min</Text>
+                      <Text type="supporting">Every {formatInterval(areaPath.intervalo_minutos)}</Text>
                     </HStack>
                 </VStack>
                 <VStack gap={2}>
@@ -365,6 +418,7 @@ export default function SynchronizationPage() {
                     label={`Edit ${areaPath.area_path}`}
                     tooltip="Edit"
                     icon={<Icon icon={Pencil} size="sm" />}
+                    isDisabled={areaPath.is_running || startingIds.has(areaPath.id)}
                     onClick={() => openEditDialog(areaPath)}
                   />
                   <IconButton
@@ -372,6 +426,7 @@ export default function SynchronizationPage() {
                     tooltip="Delete"
                     icon={<Icon icon={Trash2} size="sm" />}
                     variant="destructive"
+                    isDisabled={areaPath.is_running || startingIds.has(areaPath.id)}
                     onClick={() => setDeletingAreaPath(areaPath)}
                   />
                   </HStack>

@@ -177,12 +177,17 @@ def test_cors_preflight_allows_area_path_write_methods():
     with app.test_client() as test_client:
         response = test_client.options(
             "/api/area-paths",
-            headers={"Origin": "http://localhost:5173"},
+            headers={
+                "Origin": "http://localhost:5173",
+                "Access-Control-Request-Method": "PUT",
+                "Access-Control-Request-Headers": "content-type",
+            },
         )
 
     assert response.status_code == 200
     assert response.headers["Access-Control-Allow-Origin"] == "http://localhost:5173"
     assert response.headers["Access-Control-Allow-Methods"] == "GET, POST, PUT, DELETE, OPTIONS"
+    assert response.headers["Access-Control-Allow-Headers"] == "Content-Type"
 
 
 def test_sync_service_client_posts_json_to_configured_base_url(monkeypatch):
