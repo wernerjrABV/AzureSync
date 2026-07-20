@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { KeyboardEvent } from "react";
 import { Card } from "@astryxdesign/core/Layout";
 import { HStack, VStack } from "@astryxdesign/core/Layout";
 import { Selector } from "@astryxdesign/core/Selector";
@@ -11,6 +12,7 @@ import { EmptyState } from "@astryxdesign/core/EmptyState";
 import { Spinner } from "@astryxdesign/core/Spinner";
 import { Badge } from "@astryxdesign/core/Badge";
 import { Dialog, DialogHeader } from "@astryxdesign/core/Dialog";
+import { CodeBlock } from "@astryxdesign/core/CodeBlock";
 import { Text } from "@astryxdesign/core/Text";
 import { fetchWorkItemDetails, fetchWorkItems, fetchAreaPaths } from "../services/apiReadClient";
 import type { WorkItem, WorkItemDetails } from "../models/workItem";
@@ -137,6 +139,13 @@ export default function WorkItemsListPage() {
     setDetailsLoading(false);
   }, []);
 
+  const handleRowKeyDown = useCallback((event: KeyboardEvent<HTMLTableRowElement>, id: number) => {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      handleRowClick(id);
+    }
+  }, [handleRowClick]);
+
   const rowClickPlugin = useMemo<TablePlugin<WorkItemRow>>(
     () => ({
       transformBodyRow: (props, item) => ({
@@ -144,10 +153,13 @@ export default function WorkItemsListPage() {
         htmlProps: {
           ...props.htmlProps,
           onClick: () => handleRowClick(item.id),
+          onKeyDown: (event) => handleRowKeyDown(event, item.id),
+          tabIndex: 0,
+          "aria-label": `Open work item ${item.id} details`,
         },
       }),
     }),
-    [handleRowClick],
+    [handleRowClick, handleRowKeyDown],
   );
 
   return (
@@ -245,6 +257,7 @@ export default function WorkItemsListPage() {
         width={630}
         maxHeight="100vh"
         position={{ top: 0, right: 0, bottom: 0 }}
+        className="roadmap-details-drawer"
       >
         <DialogHeader
           title="Work item details"
@@ -280,7 +293,13 @@ export default function WorkItemsListPage() {
 
             <VStack gap={2}>
               <Text as="div" weight="semibold">Raw JSON</Text>
-              <Text as="div" type="code">{formatJson(details.item.raw_json)}</Text>
+              <CodeBlock
+                aria-label="Current raw JSON"
+                code={formatJson(details.item.raw_json)}
+                language="json"
+                hasCopyButton={false}
+                width="100%"
+              />
             </VStack>
 
             <VStack gap={3}>
@@ -288,10 +307,18 @@ export default function WorkItemsListPage() {
               {details.history.map((revision) => (
                 <VStack key={`${revision.work_item_id}-${revision.rev}`} gap={2}>
                   <Text as="div" weight="semibold">Revision {String(revision.rev)}</Text>
+                  <Text>Work item ID: {String(revision.work_item_id)}</Text>
+                  <Text>Area path ID: {String(revision.area_path_id)}</Text>
                   <Text>Revised by: {displayDetailValue(revision.revised_by)}</Text>
                   <Text>Revised date: {displayDetailValue(revision.revised_date)}</Text>
                   <Text>Synced at: {displayDetailValue(revision.synced_at)}</Text>
-                  <Text as="div" type="code">{formatJson(revision.raw_json)}</Text>
+                  <CodeBlock
+                    aria-label={`Revision ${revision.rev} raw JSON`}
+                    code={formatJson(revision.raw_json)}
+                    language="json"
+                    hasCopyButton={false}
+                    width="100%"
+                  />
                 </VStack>
               ))}
             </VStack>

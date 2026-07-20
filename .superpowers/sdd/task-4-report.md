@@ -32,3 +32,19 @@
 ## Concern
 
 Vite emits its existing generic production-build warning that the generated JavaScript chunk is larger than 500 kB. The build exits successfully; Task 4 does not change bundling strategy.
+
+## Review Fixes
+
+- Reused the existing, scoped `roadmap-details-drawer` rule from `GanttChart.css` on the work-item dialog. It sets `height` and `max-height` to `100dvh`, removes drawer margins/radius, and makes the dialog inner content scrollable.
+- Replaced inline code-text JSON with Astryx `CodeBlock`. It renders semantic `pre`/`code` content and displays the `JSON.stringify(value, null, 2)` lines individually, retaining indentation and line breaks visually.
+- Added `work_item_id` and `area_path_id` to every history revision, alongside `rev`, `revised_by`, `revised_date`, `synced_at`, and the revision payload, without changing API-returned order.
+- Confirmed the Astryx Table plugin forwards native row attributes, then added focusability, a descriptive accessible label, and Enter/Space activation to the existing row plugin.
+- Moved jsdom to `WorkItemsListPage.test.tsx` with its per-file Vitest directive and removed the global Vite test-environment override. Existing dependencies remain unchanged and no `engines` constraint was introduced.
+- Expanded behavior tests for all current fields and null fallbacks, both history payloads and metadata/order, formatted JSON line rendering, click and keyboard selection, close behavior, failed requests, and stale responses.
+
+## Review-Fix Verification
+
+- `npm test -- src/pages/WorkItemsListPage.test.tsx` — 1 file passed, 7 tests passed.
+- `npm test` — 4 files passed, 28 tests passed.
+- `npm run build` — TypeScript compilation and Vite production build completed successfully.
+- `git diff --check` — no whitespace errors.

@@ -1,3 +1,5 @@
+// @vitest-environment jsdom
+
 import "@testing-library/jest-dom/vitest";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { Theme } from "@astryxdesign/core/theme";
@@ -80,6 +82,17 @@ function renderPage() {
   );
 }
 
+function expectFormattedJson(label: string, value: unknown) {
+  const json = JSON.stringify(value, null, 2);
+  const block = screen.getByLabelText(label);
+  const code = block.querySelector("code");
+
+  expect(block.tagName).toBe("PRE");
+  expect(code).not.toBeNull();
+  expect(code).toHaveTextContent(/"System\.(Title|State)"/);
+  expect(code!.children).toHaveLength(json.split("\n").length);
+}
+
 beforeAll(() => {
   Object.defineProperty(window, "matchMedia", {
     writable: true,
@@ -143,11 +156,113 @@ describe("WorkItemsListPage", () => {
 
     expect(await screen.findByText("Work item details")).toBeInTheDocument();
     expect(screen.getByText("ID: 42")).toBeInTheDocument();
+    expect(screen.getByText("Title: Fix login")).toBeInTheDocument();
+    expect(screen.getByText("Work item type: Bug")).toBeInTheDocument();
+    expect(screen.getByText("State: Active")).toBeInTheDocument();
     expect(screen.getByText("Assigned to: Ada Lovelace")).toBeInTheDocument();
-    expect(screen.getByText(/\"System.Title\": \"Fix login\"/)).toBeInTheDocument();
-    expect(screen.getByText("Revision 1")).toBeInTheDocument();
-    expect(screen.getByText("Revision 2")).toBeInTheDocument();
-    expect(screen.getByText(/\"System.State\": \"Active\"/)).toBeInTheDocument();
+    expect(screen.getByText("Changed date: 2026-07-20T10:00:00")).toBeInTheDocument();
+    expect(screen.getByText("Parent ID: 8")).toBeInTheDocument();
+    expect(screen.getByText("Start date: 2026-07-19T10:00:00")).toBeInTheDocument();
+    expect(screen.getByText("Target date: 2026-07-30T10:00:00")).toBeInTheDocument();
+    expect(screen.getByText("Created date: 2026-07-18T10:00:00")).toBeInTheDocument();
+    expect(screen.getByText("Activated date: 2026-07-19T10:00:00")).toBeInTheDocument();
+    expect(screen.getByText("Closed date: —")).toBeInTheDocument();
+
+    expectFormattedJson("Current raw JSON", details.item.raw_json);
+
+    expect(screen.getAllByText(/^Revision \d+$/).map((heading) => heading.textContent)).toEqual([
+      "Revision 1",
+      "Revision 2",
+    ]);
+    expect(screen.getAllByText("Work item ID: 42")).toHaveLength(2);
+    expect(screen.getAllByText("Area path ID: 7")).toHaveLength(3);
+    expect(screen.getByText("Revised by: Grace Hopper")).toBeInTheDocument();
+    expect(screen.getByText("Revised date: 2026-07-18T10:00:00")).toBeInTheDocument();
+    expect(screen.getByText("Revised by: Ada Lovelace")).toBeInTheDocument();
+    expect(screen.getByText("Revised date: 2026-07-20T10:00:00")).toBeInTheDocument();
+    expect(screen.getAllByText("Synced at: 2026-07-20T10:01:00")).toHaveLength(3);
+    expectFormattedJson("Revision 1 raw JSON", details.history[0].raw_json);
+    expectFormattedJson("Revision 2 raw JSON", details.history[1].raw_json);
+  });
+
+  test("uses an em dash for every nullable current field when its value is null", async () => {
+    mockListLoad();
+    vi.mocked(apiReadClient.fetchWorkItemDetails).mockResolvedValue({
+      item: {
+        ...workItem,
+        title: null,
+        work_item_type: null,
+        state: null,
+        assigned_to: null,
+        changed_date: null,
+        parent_id: null,
+        synced_at: null,
+        start_date: null,
+        target_date: null,
+        created_date: null,
+        activated_date: null,
+        closed_date: null,
+      },
+      history: [],
+    });
+
+    renderPage();
+    fireEvent.click(await screen.findByText("Fix login"));
+
+    await screen.findByText("Current fields");
+
+    [
+      "Title",
+      "Work item type",
+      "State",
+      "Assigned to",
+      "Changed date",
+      "Parent ID",
+      "Synced at",
+      "Start date",
+      "Target date",
+      "Created date",
+      "Activated date",
+      "Closed date",
+    ].forEach((label) => {
+      expect(screen.getByText(`${label}: —`)).toBeInTheDocument();
+    });
+  });
+
+  test.each(["Enter", " "])("opens details when a row receives the %s key", async (key) => {
+    mockListLoad();
+    vi.mocked(apiReadClient.fetchWorkItemDetails).mockResolvedValue(details);
+
+    renderPage();
+
+    const row = (await screen.findByText("Fix login")).closest("tr");
+    expect(row).toHaveAttribute("tabindex", "0");
+    expect(row).toHaveAttribute("aria-label", "Open work item 42 details");
+
+    fireEvent.keyDown(row!, { key });
+
+    await waitFor(() => {
+      expect(apiReadClient.fetchWorkItemDetails).toHaveBeenCalledWith(42);
+    });
+  });
+
+  test("closes the detail drawer from its header control", async () => {
+    mockListLoad();
+    vi.mocked(apiReadClient.fetchWorkItemDetails).mockResolvedValue(details);
+
+    renderPage();
+    fireEvent.click(await screen.findByText("Fix login"));
+    await screen.findByText("Current fields");
+
+    const dialog = screen.getByText("Work item details").closest("dialog");
+    expect(dialog).toHaveAttribute("open");
+
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+
+    await waitFor(() => {
+      expect(dialog).not.toHaveAttribute("open");
+      expect(screen.queryByText("Current fields")).not.toBeInTheDocument();
+    });
   });
 
   test("shows an error banner when loading selected work item details fails", async () => {
