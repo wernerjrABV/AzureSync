@@ -85,7 +85,7 @@ function GanttLegend() {
 function taskVariant(data: ITask): GanttVariant {
   const state = data.state as string | null;
   const plannedEnd = data.plannedEnd as Date | null;
-  const executedEnd = data.executedEnd as Date | null;
+  const executedEnd = (data.barExecutedEnd as Date | null | undefined) ?? (data.executedEnd as Date | null);
   const isClosed = state === "Closed";
 
   if (!isClosed && plannedEnd !== null && new Date() > plannedEnd) {
@@ -109,14 +109,38 @@ function percentWithin(date: Date, start: Date, end: Date): number {
   return ((date.getTime() - start.getTime()) / total) * 100;
 }
 
+function monthPixelWidth(date: Date, cellWidth: number): number {
+  const daysInMonth = new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
+  return cellWidth / daysInMonth;
+}
+
+// SVAR rounds the task's left position and duration independently. That can
+// make tasks with the same target date end on different pixels. Adjust only
+// the technical end supplied to SVAR by the sub-pixel rounding error; the
+// logical end remains available to the custom template and drawer.
+function alignTaskEnd(task: GanttTask, chartStart: Date, cellWidth: number): Date {
+  const startOffset = task.start.getTime() - chartStart.getTime();
+  const endOffset = task.end.getTime() - chartStart.getTime();
+  const pixelsPerMillisecond = monthPixelWidth(task.end, cellWidth) / (24 * 60 * 60 * 1000);
+  const roundedStart = Math.round(startOffset * pixelsPerMillisecond);
+  const roundedDuration = Math.round((endOffset - startOffset) * pixelsPerMillisecond);
+  const desiredDuration = Math.round(endOffset * pixelsPerMillisecond) - roundedStart;
+  const correctionPixels = desiredDuration - roundedDuration;
+  return new Date(task.end.getTime() + correctionPixels / pixelsPerMillisecond);
+}
+
 function GanttBarContent({ data }: { data: ITask }) {
   const variant = taskVariant(data);
   const start = data.start as Date;
-  const end = data.end as Date;
+  const end = (data.logicalEnd as Date | undefined) ?? (data.end as Date);
   const plannedStart = data.plannedStart as Date | null;
   const plannedEnd = data.plannedEnd as Date | null;
   const executedStart = data.executedStart as Date | null;
-  const executedEnd = data.executedEnd as Date | null;
+  const executedEnd = (data.barExecutedEnd as Date | null | undefined) ?? (data.executedEnd as Date | null);
+  const plannedVisualEnd = plannedEnd ?? executedStart ?? end;
+  const hasCustomPeriod =
+    (plannedStart !== null && plannedVisualEnd > plannedStart) ||
+    (executedStart !== null && executedEnd !== null);
 
   return (
     <>
@@ -124,12 +148,12 @@ function GanttBarContent({ data }: { data: ITask }) {
          (the union of the planned and executed ranges) so the base SVAR
          bar — near-white in dark mode — never shows through, keeping every
          visible color one from the legend. */}
-      {plannedStart !== null && plannedEnd !== null && (
+      {plannedStart !== null && plannedVisualEnd > plannedStart && (
         <div
           className={`gantt-bar-fill gantt-bar-fill--planned gantt-bar-fill--${variant}`}
           style={{
             left: `${percentWithin(plannedStart, start, end)}%`,
-            right: `${100 - percentWithin(plannedEnd, start, end)}%`,
+            right: `${100 - percentWithin(plannedVisualEnd, start, end)}%`,
           }}
         />
       )}
@@ -141,6 +165,9 @@ function GanttBarContent({ data }: { data: ITask }) {
             right: `${100 - percentWithin(executedEnd, start, end)}%`,
           }}
         />
+      )}
+      {!hasCustomPeriod && (
+        <div className={`gantt-bar-fill gantt-bar-fill--fallback gantt-bar-fill--${variant}`} />
       )}
       {/* Planned start/target markers, drawn above everything. */}
       {plannedStart !== null && (
@@ -186,12 +213,21 @@ export default function GanttChart({ roots }: GanttChartProps) {
     [tasks],
   );
 
+  const renderTasks = useMemo(
+    () => tasks.map((task) => ({
+      ...task,
+      logicalEnd: task.end,
+      end: alignTaskEnd(task, chartRange?.start ?? task.start, 60),
+    })),
+    [chartRange, tasks],
+  );
+
   const gantt = useMemo(
     () => chartRange === null ? null : (
       <Willow>
         <Gantt
           readonly={true}
-          tasks={tasks}
+          tasks={renderTasks}
           start={chartRange.start}
           end={chartRange.end}
           cellWidth={60}
@@ -203,7 +239,7 @@ export default function GanttChart({ roots }: GanttChartProps) {
         />
       </Willow>
     ),
-    [chartRange, handleTaskSelect, tasks],
+    [chartRange, handleTaskSelect, renderTasks],
   );
 
   if (chartRange === null) {

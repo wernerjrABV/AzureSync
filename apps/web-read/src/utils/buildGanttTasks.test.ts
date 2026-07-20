@@ -39,6 +39,7 @@ describe("buildGanttTasks", () => {
         plannedEnd: new Date("2026-02-01T00:00:00"),
         executedStart: null,
         executedEnd: null,
+        barExecutedEnd: null,
       },
     ]);
   });
@@ -78,6 +79,19 @@ describe("buildGanttTasks", () => {
     expect(tasks.find((t) => t.id === 1)!.parent).toBe(0);
   });
 
+  test("extends a dated ancestor to include a child that ends later", () => {
+    const tasks = buildGanttTasks([
+      node({
+        id: 1, startDate: "2026-01-01T00:00:00", targetDate: "2026-02-01T00:00:00",
+        children: [
+          node({ id: 2, startDate: "2026-01-15T00:00:00", targetDate: "2026-03-01T00:00:00" }),
+        ],
+      }),
+    ]);
+
+    expect(tasks.find((task) => task.id === 1)!.end).toEqual(new Date("2026-03-01T00:00:00"));
+  });
+
   test("omits a node missing startDate", () => {
     const tasks = buildGanttTasks([
       node({ id: 1, startDate: null, targetDate: "2026-02-01T00:00:00" }),
@@ -86,12 +100,13 @@ describe("buildGanttTasks", () => {
     expect(tasks).toEqual([]);
   });
 
-  test("omits a node missing targetDate", () => {
+  test("uses today as the end when a node has no target or execution end", () => {
     const tasks = buildGanttTasks([
       node({ id: 1, startDate: "2026-01-01T00:00:00", targetDate: null }),
     ]);
 
-    expect(tasks).toEqual([]);
+    expect(tasks).toHaveLength(1);
+    expect(tasks[0].end.getTime()).toBeGreaterThanOrEqual(Date.now() - 1000);
   });
 
   test("omits an undated child but keeps a dated parent and dated sibling", () => {

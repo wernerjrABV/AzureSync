@@ -38,20 +38,44 @@
   box-shadow: none !important;
 }
 
+/* Allow the one-pixel end correction on custom fills to be visible. The
+   outer Gantt viewport still clips content at the chart boundaries. */
+.wx-willow-theme .wx-bars {
+  overflow: visible !important;
+}
+
 .gantt-bar-fill {
   position: absolute;
   top: 0;
   bottom: 0;
-  border-radius: var(--wx-gantt-bar-border-radius);
-  /* SVAR rounds each task's x/width independently. Extend the fill by one
-     pixel so a shared target date is not displayed as an early stop. */
-  margin-right: -1px;
+  /* The right edge represents an exact calendar boundary. Keep it square;
+     rounding it after the summary extension makes the end look inset. */
+  border-radius: var(--wx-gantt-bar-border-radius) 0 0 var(--wx-gantt-bar-border-radius);
+}
+
+/* SVAR rounds each task's x/width independently. Add a real one-pixel
+   extension so a shared target date is not displayed as an early stop. */
+.gantt-bar-fill::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: -1px;
+  bottom: 0;
+  width: 1px;
+  background-color: inherit;
+  background-image: inherit;
 }
 
 /* Full-box fill: spans the entire bar so the base SVAR bar never shows. */
 .gantt-bar-fill--full {
   left: 0;
   right: 0;
+}
+
+.gantt-bar-fill--fallback {
+  left: 0;
+  right: 0;
+  background-image: none;
 }
 
 /* SVAR positions every bar with two independent Math.round() calls (one
@@ -89,6 +113,12 @@
   );
 }
 
+/* Summary bars have a different native geometry in SVAR; keep the planned
+   layer aligned without changing regular Feature rows. */
+.wx-willow-theme .wx-summary .gantt-bar-fill--planned {
+  transform: translateX(3px);
+}
+
 /* Start/target date markers: thin white vertical lines, drawn above the
    planned/executed fills (and above everything else in the bar). */
 .gantt-bar-marker {
@@ -100,6 +130,21 @@
   box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.7);
   z-index: 10;
   transform: translateX(-1px);
+}
+
+/* SVAR's summary geometry applies an internal end inset that is not present
+   on regular task rows. Keep the custom summary layer and its target marker
+   aligned with the same calendar boundary as the child task rows. */
+.wx-willow-theme .wx-summary .gantt-bar-fill {
+  margin-right: -6px;
+}
+
+.wx-willow-theme .wx-summary {
+  background-color: transparent !important;
+}
+
+.wx-willow-theme .wx-summary .gantt-bar-marker:last-child {
+  margin-left: 5px;
 }
 
 .gantt-legend-swatch {
