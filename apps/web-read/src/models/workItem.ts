@@ -7,6 +7,9 @@ export interface WorkItem {
   assigned_to: string | null;
   changed_date: string | null;
   parent_id: number | null;
+}
+
+export interface WorkItemDetailItem extends WorkItem {
   raw_json: unknown;
   synced_at: string | null;
   start_date: string | null;
@@ -27,7 +30,7 @@ export interface WorkItemHistoryRevision {
 }
 
 export interface WorkItemDetails {
-  item: WorkItem;
+  item: WorkItemDetailItem;
   history: WorkItemHistoryRevision[];
 }
 

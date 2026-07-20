@@ -7,7 +7,7 @@ import { neutralTheme } from "@astryxdesign/theme-neutral";
 import { afterAll, afterEach, beforeAll, describe, expect, test, vi } from "vitest";
 import WorkItemsListPage from "./WorkItemsListPage";
 import * as apiReadClient from "../services/apiReadClient";
-import type { WorkItem, WorkItemDetails } from "../models/workItem";
+import type { WorkItem, WorkItemDetailItem, WorkItemDetails } from "../models/workItem";
 
 vi.mock("../services/apiReadClient", () => ({
   fetchAreaPaths: vi.fn(),
@@ -24,6 +24,10 @@ const workItem: WorkItem = {
   assigned_to: "Ada Lovelace",
   changed_date: "2026-07-20T10:00:00",
   parent_id: 8,
+};
+
+const detailItem: WorkItemDetailItem = {
+  ...workItem,
   raw_json: { fields: { "System.Title": "Fix login" } },
   synced_at: "2026-07-20T10:01:00",
   start_date: "2026-07-19T10:00:00",
@@ -34,7 +38,7 @@ const workItem: WorkItem = {
 };
 
 const details: WorkItemDetails = {
-  item: workItem,
+  item: detailItem,
   history: [
     {
       work_item_id: 42,
@@ -61,6 +65,11 @@ const secondWorkItem: WorkItem = {
   ...workItem,
   id: 99,
   title: "Second issue",
+};
+
+const secondDetailItem: WorkItemDetailItem = {
+  ...detailItem,
+  ...secondWorkItem,
   raw_json: { fields: { "System.Title": "Second issue" } },
 };
 
@@ -189,7 +198,7 @@ describe("WorkItemsListPage", () => {
     mockListLoad();
     vi.mocked(apiReadClient.fetchWorkItemDetails).mockResolvedValue({
       item: {
-        ...workItem,
+        ...detailItem,
         title: null,
         work_item_type: null,
         state: null,
@@ -292,7 +301,7 @@ describe("WorkItemsListPage", () => {
     fireEvent.click(await screen.findByText("Fix login"));
     fireEvent.click(await screen.findByText("Second issue"));
     await act(async () => {
-      secondResponse.resolve({ ...details, item: secondWorkItem });
+      secondResponse.resolve({ ...details, item: secondDetailItem });
       await secondResponse.promise;
     });
 
