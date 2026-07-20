@@ -36,6 +36,7 @@
 .wx-willow-theme .wx-bar {
   border: none !important;
   box-shadow: none !important;
+  border-radius: 0 !important;
 }
 
 /* Allow the one-pixel end correction on custom fills to be visible. The
@@ -50,7 +51,7 @@
   bottom: 0;
   /* The right edge represents an exact calendar boundary. Keep it square;
      rounding it after the summary extension makes the end look inset. */
-  border-radius: var(--wx-gantt-bar-border-radius) 0 0 var(--wx-gantt-bar-border-radius);
+  border-radius: 0;
 }
 
 /* SVAR rounds each task's x/width independently. Add a real one-pixel
@@ -98,9 +99,6 @@
 .gantt-bar-fill--neutral { background-color: #52525b; }
 .gantt-bar-fill--warning { background-color: #a16207; }
 
-/* Executed uses the state color as a solid period. */
-.gantt-bar-fill--executed {
-}
 
 /* Planned uses the same state color with a hatch pattern. */
 .gantt-bar-fill--planned {
@@ -116,7 +114,7 @@
 /* Summary bars have a different native geometry in SVAR; keep the planned
    layer aligned without changing regular Feature rows. */
 .wx-willow-theme .wx-summary .gantt-bar-fill--planned {
-  transform: translateX(3px);
+  transform: translateX(4px);
 }
 
 /* Start/target date markers: thin white vertical lines, drawn above the
@@ -136,7 +134,7 @@
    on regular task rows. Keep the custom summary layer and its target marker
    aligned with the same calendar boundary as the child task rows. */
 .wx-willow-theme .wx-summary .gantt-bar-fill {
-  margin-right: -6px;
+  margin-right: -1px;
 }
 
 .wx-willow-theme .wx-summary {
@@ -144,7 +142,7 @@
 }
 
 .wx-willow-theme .wx-summary .gantt-bar-marker:last-child {
-  margin-left: 5px;
+  margin-left: 6px;
 }
 
 .gantt-legend-swatch {
