@@ -3,10 +3,20 @@ import type { FeatureTreeItem } from "../models/feature";
 export interface FeatureTreeNode {
   id: number;
   title: string;
+  description?: string | null;
   workItemType: string;
   state: string | null;
   startDate: string | null;
   targetDate: string | null;
+  // Rolled-up "Executed date" range — start is activated_date only (no
+  // created_date fallback: an item with no activated_date is treated as
+  // not started, typically state "New"); end is closed_date.
+  // executedInProgress is true when this node or any descendant has
+  // started executing but hasn't closed yet, in which case
+  // executedEndDate is forced to null.
+  executedStartDate: string | null;
+  executedEndDate: string | null;
+  executedInProgress: boolean;
   // The node's own date used for ordering — start_date, falling back to
   // activated_date, then created_date, then closed_date. Unlike
   // startDate/targetDate (which roll up from descendants), this is never
@@ -32,11 +42,27 @@ function rollUp(node: FeatureTreeNode): void {
     rollUp(child);
     node.startDate = minDate(node.startDate, child.startDate);
     node.targetDate = maxDate(node.targetDate, child.targetDate);
+    node.executedStartDate = minDate(node.executedStartDate, child.executedStartDate);
+    if (child.executedInProgress) {
+      node.executedInProgress = true;
+    } else {
+      // Roll up the end even when the child has no executedStartDate
+      // (e.g. closed without ever being activated) — the end date is
+      // still real and must not be dropped from the parent's range.
+      node.executedEndDate = maxDate(node.executedEndDate, child.executedEndDate);
+    }
+  }
+  if (node.executedInProgress) {
+    node.executedEndDate = null;
   }
 }
 
 function computeEffectiveDate(item: FeatureTreeItem): string | null {
   return item.start_date ?? item.activated_date ?? item.created_date ?? item.closed_date;
+}
+
+function computeExecutedStartDate(item: FeatureTreeItem): string | null {
+  return item.activated_date;
 }
 
 // Most recent effectiveDate first; items with no date at all sort last.
@@ -54,36 +80,21 @@ function sortByEffectiveDate(node: FeatureTreeNode): void {
   }
 }
 
-// Maps Azure DevOps work item states to Badge variants for the roadmap tree.
-export function stateToBadgeVariant(state: string | null): "neutral" | "info" | "success" | "error" {
-  switch (state) {
-    case "Active":
-    case "In Progress":
-    case "Committed":
-      return "info";
-    case "Resolved":
-    case "Closed":
-    case "Done":
-      return "success";
-    case "Cancelled":
-    case "Canceled":
-    case "Removed":
-      return "error";
-    default:
-      return "neutral";
-  }
-}
-
 export function buildFeatureTree(items: FeatureTreeItem[]): FeatureTreeNode[] {
   const nodesById = new Map<number, FeatureTreeNode>();
   for (const item of items) {
+    const executedStartDate = computeExecutedStartDate(item);
     nodesById.set(item.id, {
       id: item.id,
       title: item.title ?? `#${item.id}`,
+      description: item.description,
       workItemType: item.work_item_type ?? "Unknown",
       state: item.state,
       startDate: item.start_date,
       targetDate: item.target_date,
+      executedStartDate,
+      executedEndDate: item.closed_date,
+      executedInProgress: executedStartDate !== null && item.closed_date === null,
       effectiveDate: computeEffectiveDate(item),
       children: [],
     });

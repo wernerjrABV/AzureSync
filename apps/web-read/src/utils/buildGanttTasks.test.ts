@@ -10,6 +10,9 @@ function node(overrides: Partial<FeatureTreeNode>): FeatureTreeNode {
     state: null,
     startDate: null,
     targetDate: null,
+    executedStartDate: null,
+    executedEndDate: null,
+    executedInProgress: false,
     effectiveDate: null,
     children: [],
     ...overrides,
@@ -32,6 +35,10 @@ describe("buildGanttTasks", () => {
         parent: 0,
         open: false,
         state: null,
+        plannedStart: new Date("2026-01-01T00:00:00"),
+        plannedEnd: new Date("2026-02-01T00:00:00"),
+        executedStart: null,
+        executedEnd: null,
       },
     ]);
   });

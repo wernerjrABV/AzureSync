@@ -29,14 +29,16 @@ export default function App() {
           />
         }
         sideNav={
-          <SideNav>
+          <SideNav collapsible={{defaultIsCollapsed: true}}>
             <SideNavItem
               label="Work Items"
+              icon="viewColumns"
               isSelected={page === "work-items"}
               onClick={() => setPage("work-items")}
             />
             <SideNavItem
               label="Features Roadmap"
+              icon="calendar"
               isSelected={page === "features-roadmap"}
               onClick={() => setPage("features-roadmap")}
             />

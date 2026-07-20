@@ -88,7 +88,16 @@ def list_features_tree(conn: psycopg.Connection, *, area_path_id: int) -> list[d
     with conn.cursor(row_factory=dict_row) as cur:
         cur.execute(
             """
-            SELECT id, title, work_item_type, state, parent_id, start_date, target_date,
+            SELECT id, title,
+                   CASE WHEN jsonb_typeof(raw_json) = 'object'
+                        THEN COALESCE(
+                            raw_json->'fields'->>'System.Description',
+                            raw_json->>'System.Description'
+                        )
+                        WHEN jsonb_typeof(raw_json) = 'string'
+                        THEN (raw_json #>> '{}')::jsonb->'fields'->>'System.Description'
+                        ELSE NULL END AS description,
+                   work_item_type, state, parent_id, start_date, target_date,
                    created_date, activated_date, closed_date
             FROM work_items AS w
             WHERE area_path_id = %s

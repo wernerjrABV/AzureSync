@@ -1,6 +1,7 @@
 export interface FeatureTreeItem {
   id: number;
   title: string | null;
+  description?: string | null;
   work_item_type: string | null;
   state: string | null;
   parent_id: number | null;
