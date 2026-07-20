@@ -1,6 +1,6 @@
 from datetime import date, datetime
 
-from flask import Flask, jsonify, request
+from flask import Flask, g, jsonify, request
 from flask.json.provider import DefaultJSONProvider
 
 from app import db, repository as repo
@@ -28,6 +28,17 @@ class ISODateJSONProvider(DefaultJSONProvider):
 
 def create_app(conn_factory=db.get_connection) -> Flask:
     app = Flask(__name__)
+
+    def open_connection():
+        conn = conn_factory()
+        g.setdefault("request_connections", []).append(conn)
+        return conn
+
+    @app.teardown_request
+    def close_connections(_error):
+        for conn in g.pop("request_connections", []):
+            if getattr(conn, "is_sqlite", False):
+                conn.close()
     app.json = ISODateJSONProvider(app)
 
     @app.after_request
@@ -44,13 +55,13 @@ def create_app(conn_factory=db.get_connection) -> Flask:
 
     @app.route("/api/area-paths", methods=["GET"])
     def list_area_paths():
-        conn = conn_factory()
+        conn = open_connection()
         rows = repo.list_area_paths(conn)
         return jsonify(rows)
 
     @app.route("/api/work-items", methods=["GET"])
     def list_work_items():
-        conn = conn_factory()
+        conn = open_connection()
         try:
             area_path_id = request.args.get("area_path_id", type=int)
             search = request.args.get("search")
@@ -80,7 +91,7 @@ def create_app(conn_factory=db.get_connection) -> Flask:
 
     @app.route("/api/work-items/<int:work_item_id>", methods=["GET"])
     def get_work_item_details(work_item_id):
-        conn = conn_factory()
+        conn = open_connection()
         details = repo.get_work_item_details(conn, work_item_id=work_item_id)
         if details is None:
             return jsonify({"error": "work item not found"}), 404
@@ -92,7 +103,7 @@ def create_app(conn_factory=db.get_connection) -> Flask:
         if area_path_id is None:
             return jsonify({"error": "area_path_id is required"}), 400
 
-        conn = conn_factory()
+        conn = open_connection()
         rows = repo.list_features_tree(conn, area_path_id=area_path_id)
         return jsonify({"data": rows})
 

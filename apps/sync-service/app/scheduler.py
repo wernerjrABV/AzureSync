@@ -10,16 +10,20 @@ JOB_ID_PREFIX = "sync-area-path-"
 
 def _sync_all_active(conn_factory):
     conn = conn_factory()
-    now = datetime.datetime.now()
-    for row in repo.list_area_paths(conn):
-        if not row["ativo"]:
-            continue
-        if row["last_sync_at"]:
-            due_at = row["last_sync_at"] + datetime.timedelta(minutes=row["intervalo_minutos"])
-            if now < due_at:
+    try:
+        now = datetime.datetime.now()
+        for row in repo.list_area_paths(conn):
+            if not row["ativo"]:
                 continue
-        client = AdoClient(row["organization"], row["project"])
-        sync_service.run_sync(conn, row, client)
+            if row["last_sync_at"]:
+                due_at = row["last_sync_at"] + datetime.timedelta(minutes=row["intervalo_minutos"])
+                if now < due_at:
+                    continue
+            client = AdoClient(row["organization"], row["project"])
+            sync_service.run_sync(conn, row, client)
+    finally:
+        if getattr(conn, "is_sqlite", False):
+            conn.close()
 
 
 def build_scheduler(conn_factory=db.get_connection) -> BackgroundScheduler:

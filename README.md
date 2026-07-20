@@ -23,6 +23,15 @@ docs/
 
 ## Running the sync service
 
+### Starting all apps on Windows
+
+To start the sync service, read API, and web frontend at once, double-click
+`scripts/run-all.cmd`. It runs the services without leaving a terminal window
+open and launches the web interface at http://127.0.0.1:5173.
+
+To stop the services later, run `scripts/stop-all.ps1` from PowerShell.
+Runtime logs are written to the local `logs/` directory.
+
 ```bash
 cd apps/sync-service
 pip install -r requirements.txt

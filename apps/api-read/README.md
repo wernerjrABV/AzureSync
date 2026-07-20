@@ -11,7 +11,7 @@ Read-only Flask API over the Postgres database populated by
   `tests/test_readonly_guardrail.py`.
 - No schema/DDL statements — schema is owned entirely by
   `apps/sync-service/app/db.py`.
-- Uses the same `DATABASE_URL` as sync-service today; there is no separate
+- Uses the same `DATABASE_URL` as sync-service today; configuration is loaded from the repository root `.env`.
   read-only DB role yet (tracked as a known gap in
   `docs/adr/0003-read-only-api.md`).
 
@@ -31,7 +31,8 @@ Server starts on `http://127.0.0.1:5001` by default (override with
 
 | Variable | Required | Default | Purpose |
 |---|---|---|---|
-| `DATABASE_URL` | yes | — | Postgres connection string (same DB as sync-service) |
+| `DATABASE_URL` | no | — | Postgres connection string; SQLite is used when missing or unavailable |
+| `SQLITE_DATABASE_PATH` | no | `apps/data/azure_sync.sqlite3` | Persistent SQLite fallback path |
 | `API_READ_HOST` | no | `127.0.0.1` | Bind host |
 | `API_READ_PORT` | no | `5001` | Bind port |
 | `API_READ_CORS_ORIGIN` | no | `http://127.0.0.1:5173,http://localhost:5173` | Comma-separated list of origins allowed via `Access-Control-Allow-Origin` (should include whatever origin `apps/web-read`'s dev server is actually opened from — `localhost` and `127.0.0.1` are treated as different origins by browsers) |

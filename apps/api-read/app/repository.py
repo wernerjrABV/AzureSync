@@ -118,6 +118,17 @@ def get_work_item_details(
 
 
 def list_features_tree(conn: psycopg.Connection, *, area_path_id: int) -> list[dict]:
+    if getattr(conn, "is_sqlite", False):
+        with conn.cursor(row_factory=dict_row) as cur:
+            cur.execute("""
+                SELECT id, title, NULL AS description, work_item_type, state, parent_id,
+                       start_date, target_date, created_date, activated_date, closed_date
+                FROM work_items WHERE area_path_id = %s
+                  AND work_item_type IN ('Feature', 'Epic', 'Solution')
+                  AND (state IS NULL OR state NOT IN ('Cancelled', 'Canceled', 'Removed'))
+                ORDER BY id
+            """, (area_path_id,))
+            return cur.fetchall()
     with conn.cursor(row_factory=dict_row) as cur:
         cur.execute(
             """

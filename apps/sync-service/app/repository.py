@@ -168,10 +168,11 @@ def delete_work_items(conn: psycopg.Connection, area_path_id: int, ids: set[int]
     if not ids:
         return
     with conn.cursor() as cur:
-        cur.execute(
-            "DELETE FROM work_items WHERE area_path_id = %s AND id = ANY(%s)",
-            (area_path_id, list(ids)),
-        )
+        if getattr(conn, "is_sqlite", False):
+            marks = ",".join("%s" for _ in ids)
+            cur.execute(f"DELETE FROM work_items WHERE area_path_id = %s AND id IN ({marks})", [area_path_id, *ids])
+        else:
+            cur.execute("DELETE FROM work_items WHERE area_path_id = %s AND id = ANY(%s)", (area_path_id, list(ids)))
 
 
 def create_sync_log(conn: psycopg.Connection, area_path_id: int, started_at) -> int:

@@ -20,8 +20,9 @@ this database from another app.
 ## Setup
 
 1. Set Windows environment variables:
-   - `DATABASE_URL` — e.g. `postgresql://user:pass@localhost:5432/azure_sync`
-   - `AZURE_DEVOPS_API_KEY` — your Azure DevOps Personal Access Token
+   - Put `DATABASE_URL` and `AZURE_DEVOPS_API_KEY` in the repository root `.env`.
+   - `SQLITE_DATABASE_PATH` is optional and defaults to `apps/data/azure_sync.sqlite3`.
+   - If PostgreSQL is not configured or cannot be reached, the service uses SQLite.
 2. Install dependencies:
    ```
    pip install -r requirements.txt
