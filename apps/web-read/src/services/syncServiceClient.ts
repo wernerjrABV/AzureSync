@@ -65,8 +65,7 @@ function jsonOptions(method: "POST" | "PUT", body: AreaPathInput): RequestInit {
 }
 
 export async function fetchSyncAreaPaths(): Promise<SyncAreaPath[]> {
-  const response = await request<DataResponse<SyncAreaPath[]>>("/api/area-paths");
-  return response.data;
+  return request<SyncAreaPath[]>("/api/area-paths");
 }
 
 export async function createSyncAreaPath(input: AreaPathInput): Promise<SyncAreaPath> {

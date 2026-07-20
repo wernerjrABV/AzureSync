@@ -96,7 +96,12 @@ afterAll(() => {
 afterEach(() => {
   cleanup();
   vi.useRealTimers();
-  vi.resetAllMocks();
+  vi.clearAllMocks();
+  vi.mocked(syncServiceClient.fetchSyncAreaPaths).mockReset();
+  vi.mocked(syncServiceClient.createSyncAreaPath).mockReset();
+  vi.mocked(syncServiceClient.updateSyncAreaPath).mockReset();
+  vi.mocked(syncServiceClient.deleteSyncAreaPath).mockReset();
+  vi.mocked(syncServiceClient.startAreaPathSync).mockReset();
 });
 
 describe("SynchronizationPage", () => {
@@ -138,6 +143,18 @@ describe("SynchronizationPage", () => {
     expect(await screen.findByText("Intake\\Platform")).toBeInTheDocument();
     expect(screen.getByText("Running")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Synchronize" })).toBeDisabled();
+  });
+
+  test("renders compact icon actions in a three-column card grid", async () => {
+    mockInitialLoad([areaPath, { ...areaPath, id: 8, area_path: "Intake\\Mobile" }]);
+
+    renderPage();
+
+    expect(await screen.findByText("Intake\\Platform")).toBeInTheDocument();
+    expect(screen.getByTestId("synchronization-card-grid")).toHaveClass("astryx-grid");
+    expect(screen.getByRole("button", { name: "Synchronize Intake\\Platform" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Edit Intake\\Platform" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Delete Intake\\Platform" })).toBeInTheDocument();
   });
 
   test("opens one form dialog for create and submits JSON-equivalent values", async () => {

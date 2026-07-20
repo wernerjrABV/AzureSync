@@ -41,7 +41,7 @@ describe("syncServiceClient", () => {
 
   test("fetches and parses the sync area path list", async () => {
     const fetchMock = vi.fn().mockResolvedValue(
-      new Response(JSON.stringify({ data: [areaPath] }), { status: 200 })
+      new Response(JSON.stringify([areaPath]), { status: 200 })
     );
     vi.stubGlobal("fetch", fetchMock);
 

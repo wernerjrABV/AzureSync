@@ -1,11 +1,20 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Pencil, Trash2 } from "lucide-react";
 import { AlertDialog } from "@astryxdesign/core/AlertDialog";
 import { Badge } from "@astryxdesign/core/Badge";
 import { Banner } from "@astryxdesign/core/Banner";
 import { Button } from "@astryxdesign/core/Button";
 import { Dialog, DialogHeader } from "@astryxdesign/core/Dialog";
+import { Divider } from "@astryxdesign/core/Divider";
 import { EmptyState } from "@astryxdesign/core/EmptyState";
-import { Card, HStack, VStack } from "@astryxdesign/core/Layout";
+import { Grid } from "@astryxdesign/core/Grid";
+import { Icon } from "@astryxdesign/core/Icon";
+import { IconButton } from "@astryxdesign/core/IconButton";
+import {
+  Card,
+  HStack,
+  VStack,
+} from "@astryxdesign/core/Layout";
 import { Selector } from "@astryxdesign/core/Selector";
 import { Spinner } from "@astryxdesign/core/Spinner";
 import { Text } from "@astryxdesign/core/Text";
@@ -309,46 +318,69 @@ export default function SynchronizationPage() {
         />
       )}
 
-      {!isLoading && areaPaths.map((areaPath) => (
-        <Card key={areaPath.id}>
-          <VStack gap={3}>
-            <HStack justify="between" align="center" wrap="wrap">
-              <VStack gap={1}>
-                <Text as="h2" type="large" weight="semibold">{areaPath.area_path}</Text>
-                <Text type="supporting">{areaPath.organization} / {areaPath.project}</Text>
+      {!isLoading && areaPaths.length > 0 && (
+        <Grid
+          data-testid="synchronization-card-grid"
+          columns={{ minWidth: 280, max: 3 }}
+          gap={4}
+        >
+          {areaPaths.map((areaPath) => (
+            <Card key={areaPath.id} padding={3} height="100%">
+              <VStack gap={3} height="100%" justify="between">
+                <VStack gap={1}>
+                    <HStack justify="between" align="center" wrap="wrap">
+                      <Text as="h2" type="large" weight="semibold">{areaPath.area_path}</Text>
+                      <Badge
+                        variant={areaPath.ativo ? "success" : "neutral"}
+                        label={areaPath.ativo ? "Active" : "Inactive"}
+                      />
+                    </HStack>
+                    <Text type="supporting">{areaPath.organization} / {areaPath.project}</Text>
+                    <HStack gap={2} align="center" wrap="wrap">
+                      <Badge
+                        variant={areaPath.is_running ? "warning" : statusVariant(areaPath.last_sync_status)}
+                        label={areaPath.is_running ? "Running" : areaPath.last_sync_status ?? "Not synchronized"}
+                      />
+                      <Text type="supporting">Every {areaPath.intervalo_minutos} min</Text>
+                    </HStack>
+                </VStack>
+                <VStack gap={2}>
+                  <Text type="supporting">Include subpaths: {areaPath.incluir_subpaths ? "Yes" : "No"}</Text>
+                  <Text type="supporting">Last synchronized: {areaPath.last_sync_at ?? "Never"}</Text>
+                  <Text type="supporting">Last sync count: {areaPath.last_sync_count ?? 0}</Text>
+                  <StatusMessage areaPath={areaPath} />
+                </VStack>
+                <VStack gap={2}>
+                  <Divider />
+                  <HStack gap={2} justify="end" align="center">
+                  <IconButton
+                    label={`Synchronize ${areaPath.area_path}`}
+                    tooltip="Synchronize"
+                    icon={<Icon icon="arrowsUpDown" size="sm" />}
+                    variant="primary"
+                    isDisabled={areaPath.is_running || startingIds.has(areaPath.id)}
+                    onClick={() => void handleStartSync(areaPath.id)}
+                  />
+                  <IconButton
+                    label={`Edit ${areaPath.area_path}`}
+                    tooltip="Edit"
+                    icon={<Icon icon={Pencil} size="sm" />}
+                    onClick={() => openEditDialog(areaPath)}
+                  />
+                  <IconButton
+                    label={`Delete ${areaPath.area_path}`}
+                    tooltip="Delete"
+                    icon={<Icon icon={Trash2} size="sm" />}
+                    variant="destructive"
+                    onClick={() => setDeletingAreaPath(areaPath)}
+                  />
+                  </HStack>
+                </VStack>
               </VStack>
-              <HStack gap={2} align="center" wrap="wrap">
-                <Badge
-                  variant={areaPath.ativo ? "success" : "neutral"}
-                  label={areaPath.ativo ? "Active" : "Inactive"}
-                />
-                <Badge
-                  variant={areaPath.is_running ? "warning" : statusVariant(areaPath.last_sync_status)}
-                  label={areaPath.is_running ? "Running" : areaPath.last_sync_status ?? "Not synchronized"}
-                />
-                <Button
-                  label="Synchronize"
-                  variant="primary"
-                  isDisabled={areaPath.is_running || startingIds.has(areaPath.id)}
-                  onClick={() => void handleStartSync(areaPath.id)}
-                />
-                <Button label={`Edit ${areaPath.area_path}`} onClick={() => openEditDialog(areaPath)} />
-                <Button
-                  label={`Delete ${areaPath.area_path}`}
-                  variant="destructive"
-                  onClick={() => setDeletingAreaPath(areaPath)}
-                />
-              </HStack>
-            </HStack>
-            <Text type="supporting">Every {areaPath.intervalo_minutos} minutes</Text>
-            <Text type="supporting">Include subpaths: {areaPath.incluir_subpaths ? "Yes" : "No"}</Text>
-            <Text type="supporting">Last synchronized: {areaPath.last_sync_at ?? "Never"}</Text>
-            <Text type="supporting">Processed items: {areaPath.last_sync_count ?? 0}</Text>
-            <Text type="supporting">Last sync count: {areaPath.last_sync_count ?? 0}</Text>
-            <StatusMessage areaPath={areaPath} />
-          </VStack>
-        </Card>
-      ))}
+            </Card>
+          ))}
+        </Grid>
+      )}
 
       <Dialog
         isOpen={isFormOpen}
