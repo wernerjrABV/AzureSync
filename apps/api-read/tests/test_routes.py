@@ -175,3 +175,71 @@ def test_list_features_tree_requires_area_path_id(client):
 
     assert response.status_code == 400
     assert response.get_json() == {"error": "area_path_id is required"}
+
+
+def test_get_work_item_details(client, db_conn):
+    with db_conn.cursor() as cur:
+        cur.execute(
+            "INSERT INTO area_paths (organization, project, area_path) VALUES (%s, %s, %s) RETURNING id",
+            ("org", "proj", "proj\\A"),
+        )
+        area_path_id = cur.fetchone()[0]
+        cur.execute(
+            """
+            INSERT INTO work_items (id, area_path_id, title, work_item_type, state, changed_date, raw_json)
+            VALUES (42, %s, 'Current title', 'Bug', 'Active', '2026-07-10T12:00:00', '{}')
+            """,
+            (area_path_id,),
+        )
+        cur.execute(
+            """
+            INSERT INTO work_item_history
+                (work_item_id, area_path_id, rev, revised_by, revised_date, raw_json)
+            VALUES (42, %s, 1, 'alice@example.com', '2026-07-01T10:00:00', '{"rev": 1}')
+            """,
+            (area_path_id,),
+        )
+    db_conn.commit()
+
+    response = client.get("/api/work-items/42")
+
+    assert response.status_code == 200
+    assert response.get_json() == {
+        "data": {
+            "item": {
+                "id": 42,
+                "area_path_id": area_path_id,
+                "title": "Current title",
+                "work_item_type": "Bug",
+                "state": "Active",
+                "assigned_to": None,
+                "changed_date": "2026-07-10T12:00:00",
+                "parent_id": None,
+                "raw_json": {},
+                "synced_at": None,
+                "start_date": None,
+                "target_date": None,
+                "created_date": None,
+                "activated_date": None,
+                "closed_date": None,
+            },
+            "history": [
+                {
+                    "work_item_id": 42,
+                    "area_path_id": area_path_id,
+                    "rev": 1,
+                    "revised_by": "alice@example.com",
+                    "revised_date": "2026-07-01T10:00:00",
+                    "raw_json": {"rev": 1},
+                    "synced_at": None,
+                }
+            ],
+        }
+    }
+
+
+def test_get_work_item_details_not_found(client):
+    response = client.get("/api/work-items/999")
+
+    assert response.status_code == 404
+    assert response.get_json() == {"error": "work item not found"}
