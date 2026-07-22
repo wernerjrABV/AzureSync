@@ -25,3 +25,8 @@ apps/data/
 *.tsbuildinfo
 
 .worktrees/
+
+# dwyt start
+*mcp.json
+*opencode.json
+# dwyt end

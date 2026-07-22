@@ -1,0 +1,95 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "azureDataQuery - Runtime Architecture",
+    "subtitle": "Primary runtime path, external dependencies, and trust boundaries",
+    "output": "runtime-architecture.html",
+    "visual_preset": "signal-flow",
+    "quality_profile": "showcase",
+    "viewBox": [1500, 780],
+    "views": [
+      {
+        "id": "primary-read-path",
+        "label": "Primary read path",
+        "focus": ["browser", "web-read", "api-read", "postgres"],
+        "note": "User-facing reads flow through the frontend and read API into PostgreSQL."
+      },
+      {
+        "id": "sync-write-path",
+        "label": "Sync write path",
+        "focus": ["scheduler", "sync-engine", "ado-client", "azure-devops", "postgres"],
+        "note": "Scheduled or manual sync fetches Azure DevOps data and persists it through the sole writer."
+      }
+    ]
+  },
+  "components": [
+    { "id": "browser", "type": "external", "label": "User browser", "sublabel": "operator / consumer", "tag": "ENTRY", "pos": [40, 300], "size": [150, 70] },
+    { "id": "web-read", "type": "frontend", "label": "web-read", "sublabel": "Vite + React + TypeScript", "tag": "UI", "pos": [250, 300], "size": [170, 70] },
+    { "id": "api-read", "type": "backend", "label": "api-read", "sublabel": "Flask read API", "tag": "SELECT-ONLY", "pos": [490, 300], "size": [190, 70] },
+    { "id": "postgres", "type": "database", "label": "PostgreSQL", "sublabel": "area paths, items, history, logs", "tag": "STATE", "pos": [830, 300], "size": [210, 70] },
+    { "id": "scheduler", "type": "cloud", "label": "Sync scheduler", "sublabel": "per-area due time in Python", "tag": "TICK", "pos": [250, 560], "size": [190, 70] },
+    { "id": "sync-engine", "type": "backend", "label": "sync-service", "sublabel": "run_sync and transaction boundary", "tag": "ONLY WRITER", "pos": [520, 560], "size": [220, 70] },
+    { "id": "ado-client", "type": "backend", "label": "AdoClient", "sublabel": "WIQL + work item batch + history REST", "tag": "ADAPTER", "pos": [820, 560], "size": [220, 70] },
+    { "id": "azure-devops", "type": "external", "label": "Azure DevOps", "sublabel": "Work Item Tracking REST API", "tag": "EXTERNAL", "pos": [1150, 560], "size": [210, 70] },
+    { "id": "config", "type": "security", "label": "Env + PAT", "sublabel": "DATABASE_URL, TEST_DATABASE_URL, AZURE_DEVOPS_API_KEY", "tag": "SECRET", "pos": [1150, 300], "size": [220, 70] },
+    { "id": "contracts", "type": "cloud", "label": "Shared contracts", "sublabel": "DTO and schema conventions", "tag": "SHARED", "pos": [40, 560], "size": [170, 70] }
+  ],
+  "boundaries": [
+    { "kind": "security-group", "label": "Public / client boundary", "wraps": ["browser", "web-read"] },
+    { "kind": "region", "label": "Application runtime", "wraps": ["api-read", "scheduler", "sync-engine", "ado-client", "config", "contracts"] },
+    { "kind": "security-group", "label": "Data boundary", "wraps": ["postgres"] },
+    { "kind": "region", "label": "External services", "wraps": ["azure-devops"] }
+  ],
+  "connections": [
+    { "id": "browser-web", "from": "browser", "to": "web-read", "label": "HTTPS", "variant": "emphasis", "fromSide": "right", "toSide": "left" },
+    { "id": "web-api", "from": "web-read", "to": "api-read", "label": "HTTP JSON", "variant": "emphasis", "fromSide": "right", "toSide": "left" },
+    { "id": "api-db", "from": "api-read", "to": "postgres", "label": "SELECT", "variant": "default", "fromSide": "right", "toSide": "left" },
+    { "id": "api-sync", "from": "api-read", "to": "sync-engine", "label": "manual sync / area-path CRUD", "variant": "security", "fromSide": "bottom", "toSide": "top", "route": "orthogonal-v", "labelDy": -10 },
+    { "id": "scheduler-sync", "from": "scheduler", "to": "sync-engine", "label": "due work", "variant": "dashed", "fromSide": "right", "toSide": "left" },
+    { "id": "sync-db", "from": "sync-engine", "to": "postgres", "label": "UPSERT / DELETE / checkpoint", "variant": "security", "fromSide": "top", "toSide": "bottom", "route": "orthogonal-v", "labelDx": 25 },
+    { "id": "sync-ado-client", "from": "sync-engine", "to": "ado-client", "variant": "emphasis", "fromSide": "right", "toSide": "left" },
+    { "id": "ado-azure", "from": "ado-client", "to": "azure-devops", "label": "WIQL + REST", "variant": "emphasis", "fromSide": "right", "toSide": "left" },
+    { "id": "config-ado", "from": "config", "to": "ado-client", "label": "PAT / runtime env", "variant": "security", "fromSide": "bottom", "toSide": "top", "route": "orthogonal-v" },
+    { "id": "contracts-web", "from": "contracts", "to": "web-read", "label": "listing shape", "variant": "dashed", "fromSide": "top", "toSide": "bottom", "route": "orthogonal-v" }
+  ],
+  "cards": [
+    {
+      "dot": "rose",
+      "title": "Trust and write policy",
+      "items": [
+        "sync-service is the only database writer",
+        "api-read repository is SELECT-only and forwards mutations",
+        "frontend never connects directly to PostgreSQL"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "Sync invariants",
+      "items": [
+        "run_sync owns locking, checkpoint advancement, upserts, deletes, and history backfill",
+        "failure rolls back before error status is written",
+        "history_loaded_at flips only after a complete first-load backfill with zero item failures"
+      ]
+    },
+    {
+      "dot": "cyan",
+      "title": "Read surface",
+      "items": [
+        "GET /api/work-items",
+        "GET /api/work-items/:id",
+        "GET /api/features-tree",
+        "GET /api/area-paths"
+      ]
+    },
+    {
+      "dot": "violet",
+      "title": "Shared runtime facts",
+      "items": [
+        "SQLite fallback exists for local and test execution",
+        "api-read uses the same DATABASE_URL today but no write SQL",
+        "shared packages carry contracts and observability conventions, not direct DB access"
+      ]
+    }
+  ]
+}
