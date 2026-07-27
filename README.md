@@ -33,9 +33,12 @@ To stop the services later, run `scripts/stop-all.ps1` from PowerShell.
 Runtime logs are written to the local `logs/` directory.
 
 ```bash
+python -m pip install --user uv
 cd apps/sync-service
-pip install -r requirements.txt
-python run.py
+uv venv
+uv pip install --python .venv\Scripts\python.exe -r requirements.txt
+.\.venv\Scripts\Activate.ps1
+python .\run.py
 ```
 
 Open http://127.0.0.1:5000. See `apps/sync-service/README.md` for env vars

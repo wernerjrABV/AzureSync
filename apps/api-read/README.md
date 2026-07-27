@@ -17,11 +17,14 @@ Read-only Flask API over the Postgres database populated by
 
 ## Running
 
-```bash
+```powershell
+python -m pip install --user uv
 cd apps/api-read
-pip install -r requirements.txt
+uv venv
+uv pip install --python .venv\Scripts\python.exe -r requirements.txt
+.\.venv\Scripts\Activate.ps1
 set DATABASE_URL=postgresql://postgres:postgres@localhost:5432/azure_sync
-python run.py
+python .\run.py
 ```
 
 Server starts on `http://127.0.0.1:5001` by default (override with
@@ -53,6 +56,7 @@ createdb azure_sync_test
 set TEST_DATABASE_URL=postgresql://postgres:postgres@localhost:5432/azure_sync_test
 cd apps/sync-service && python -c "from app import db; c = db.get_connection(); db.init_schema(c); c.commit()"
 cd ../api-read
+.\.venv\Scripts\Activate.ps1
 pytest
 ```
 

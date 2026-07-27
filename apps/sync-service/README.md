@@ -24,12 +24,15 @@ this database from another app.
    - `SQLITE_DATABASE_PATH` is optional and defaults to `apps/data/azure_sync.sqlite3`.
    - If PostgreSQL is not configured or cannot be reached, the service uses SQLite.
 2. Install dependencies:
-   ```
-   pip install -r requirements.txt
+   ```powershell
+   python -m pip install --user uv
+   uv venv
+   uv pip install --python .venv\Scripts\python.exe -r requirements.txt
    ```
 3. Run:
    ```
-   python run.py
+   .\.venv\Scripts\Activate.ps1
+   python .\run.py
    ```
 4. Open http://127.0.0.1:5000
 

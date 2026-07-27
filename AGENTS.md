@@ -29,8 +29,10 @@ Codex guidance for this repo. Keep `docs/architecture/monorepo-architecture.md` 
 ```bash
 cd apps/sync-service
 
-pip install -r requirements.txt
-python run.py
+uv venv
+uv pip install --python .venv\Scripts\python.exe -r requirements.txt
+.\.venv\Scripts\Activate.ps1
+python .\run.py
 
 createdb azure_sync_test
 set TEST_DATABASE_URL=postgresql://postgres:postgres@localhost:5432/azure_sync_test
