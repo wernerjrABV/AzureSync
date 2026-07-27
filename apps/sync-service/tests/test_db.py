@@ -71,3 +71,45 @@ def test_work_items_has_created_activated_closed_date_columns(db_conn):
         )
         columns = {row[0] for row in cur.fetchall()}
     assert columns == {"created_date", "activated_date", "closed_date"}
+
+
+def test_init_schema_creates_capacity_interval_and_snapshot_tables(db_conn):
+    with db_conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT column_name, data_type
+            FROM information_schema.columns
+            WHERE table_name = 'work_item_status_intervals'
+            ORDER BY column_name
+            """
+        )
+        interval_columns = {row[0]: row[1] for row in cur.fetchall()}
+        cur.execute(
+            """
+            SELECT column_name, data_type
+            FROM information_schema.columns
+            WHERE table_name = 'capacity_snapshots'
+            ORDER BY column_name
+            """
+        )
+        snapshot_columns = {row[0]: row[1] for row in cur.fetchall()}
+        cur.execute(
+            "SELECT indexname FROM pg_indexes WHERE tablename = 'work_item_status_intervals'"
+        )
+        interval_indexes = {row[0] for row in cur.fetchall()}
+
+    assert interval_columns == {
+        "area_path_id": "integer",
+        "ended_at": "timestamp without time zone",
+        "revision": "integer",
+        "started_at": "timestamp without time zone",
+        "state": "text",
+        "work_item_id": "integer",
+        "work_item_type": "text",
+    }
+    assert snapshot_columns == {
+        "area_path_id": "integer",
+        "generated_at": "timestamp without time zone",
+        "payload": "jsonb",
+    }
+    assert "idx_work_item_status_intervals_area_type_ended_at" in interval_indexes

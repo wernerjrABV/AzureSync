@@ -122,6 +122,8 @@ def test_update_sync_result_stores_error_msg(db_conn):
 import datetime
 import json
 
+from app.capacity import StatusInterval
+
 
 def _make_area_path(db_conn):
     area_path_id = repo.create_area_path(db_conn, "org", "proj", "proj\\A")
@@ -375,3 +377,66 @@ def test_upsert_work_items_persists_created_activated_closed_date(db_conn):
     assert created_date == datetime.datetime(2025, 11, 1, 9, 0, 0)
     assert activated_date == datetime.datetime(2025, 12, 1, 9, 0, 0)
     assert closed_date == datetime.datetime(2026, 6, 15, 17, 30, 0)
+
+
+def test_replace_work_item_status_intervals_replaces_existing_item_intervals(db_conn):
+    area_path_id = _make_area_path(db_conn)
+    original = StatusInterval(
+        work_item_id=42,
+        area_path_id=area_path_id,
+        revision=1,
+        work_item_type="Bug",
+        state="New",
+        started_at=datetime.datetime(2026, 7, 1, 9, 0),
+        ended_at=datetime.datetime(2026, 7, 2, 9, 0),
+    )
+    replacement = StatusInterval(
+        work_item_id=42,
+        area_path_id=area_path_id,
+        revision=2,
+        work_item_type="Bug",
+        state="Development",
+        started_at=datetime.datetime(2026, 7, 2, 9, 0),
+        ended_at=datetime.datetime(2026, 7, 3, 9, 0),
+    )
+
+    repo.replace_work_item_status_intervals(
+        db_conn, work_item_id=42, area_path_id=area_path_id, intervals=[original]
+    )
+    repo.replace_work_item_status_intervals(
+        db_conn, work_item_id=42, area_path_id=area_path_id, intervals=[replacement]
+    )
+    db_conn.commit()
+
+    assert repo.load_capacity_intervals(db_conn, area_path_id=area_path_id) == [
+        {
+            "work_item_id": 42,
+            "area_path_id": area_path_id,
+            "revision": 2,
+            "work_item_type": "Bug",
+            "state": "Development",
+            "started_at": datetime.datetime(2026, 7, 2, 9, 0),
+            "ended_at": datetime.datetime(2026, 7, 3, 9, 0),
+        }
+    ]
+
+
+def test_capacity_snapshot_roundtrip_replaces_existing_payload(db_conn):
+    area_path_id = _make_area_path(db_conn)
+    repo.upsert_capacity_snapshot(
+        db_conn,
+        area_path_id=area_path_id,
+        payload={"forecast": {"expected": 3}},
+        generated_at=datetime.datetime(2026, 7, 15, 10, 0),
+    )
+    repo.upsert_capacity_snapshot(
+        db_conn,
+        area_path_id=area_path_id,
+        payload={"forecast": {"expected": 6}},
+        generated_at=datetime.datetime(2026, 7, 16, 10, 0),
+    )
+    db_conn.commit()
+
+    assert repo.get_capacity_snapshot(db_conn, area_path_id=area_path_id) == {
+        "forecast": {"expected": 6}
+    }

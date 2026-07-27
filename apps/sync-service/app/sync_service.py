@@ -2,6 +2,7 @@ import datetime
 
 from app import repository as repo
 from app.ado_client import AdoAuthError, AdoClient, AdoRetryExhaustedError
+from app.capacity import StatusInterval, build_capacity_snapshot, build_status_intervals
 
 # Commit periodically during the per-item history backfill so a first-load sync over
 # thousands of work items doesn't hold one long-lived Postgres transaction open
@@ -73,6 +74,20 @@ def _do_sync(conn, area_path_row: dict, client: AdoClient) -> int:
         try:
             updates = client.get_work_item_updates(work_item_id)
             repo.upsert_work_item_history(conn, area_path_id, work_item_id, updates)
+            work_item_type = repo.get_work_item_type(conn, work_item_id=work_item_id)
+            if work_item_type is not None:
+                intervals = build_status_intervals(
+                    work_item_id=work_item_id,
+                    area_path_id=area_path_id,
+                    work_item_type=work_item_type,
+                    updates=repo.load_work_item_history(conn, work_item_id=work_item_id),
+                )
+                repo.replace_work_item_status_intervals(
+                    conn,
+                    work_item_id=work_item_id,
+                    area_path_id=area_path_id,
+                    intervals=intervals,
+                )
         except AdoAuthError:
             # bad credentials will fail identically for every remaining item; let it
             # propagate so run_sync reports auth_error and stops the sync immediately.
@@ -88,6 +103,23 @@ def _do_sync(conn, area_path_row: dict, client: AdoClient) -> int:
 
     if is_first_history_load and not any_history_failed:
         repo.set_history_loaded(conn, area_path_id, datetime.datetime.now())
+
+    if not any_history_failed:
+        generated_at = datetime.datetime.now()
+        snapshot = build_capacity_snapshot(
+            area_path_id=area_path_id,
+            intervals=[
+                StatusInterval(**interval)
+                for interval in repo.load_capacity_intervals(conn, area_path_id=area_path_id)
+            ],
+            as_of=generated_at,
+        )
+        repo.upsert_capacity_snapshot(
+            conn,
+            area_path_id=area_path_id,
+            payload=snapshot,
+            generated_at=generated_at,
+        )
 
     return len(items)
 
