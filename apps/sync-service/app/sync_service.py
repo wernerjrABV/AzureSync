@@ -75,7 +75,12 @@ def _do_sync(conn, area_path_row: dict, client: AdoClient) -> int:
             updates = client.get_work_item_updates(work_item_id)
             repo.upsert_work_item_history(conn, area_path_id, work_item_id, updates)
             work_item_type = repo.get_work_item_type(conn, work_item_id=work_item_id)
-            if work_item_type is not None:
+            if work_item_type is None:
+                # Keep the last known interval projection in place. Replacing it with
+                # an empty projection would make the capacity data silently incomplete;
+                # treating this as a per-item history failure also retains the snapshot.
+                any_history_failed = True
+            else:
                 intervals = build_status_intervals(
                     work_item_id=work_item_id,
                     area_path_id=area_path_id,

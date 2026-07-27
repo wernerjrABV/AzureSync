@@ -4,6 +4,7 @@ from app import db
 from app import config
 from app import repository as repo
 from app import sync_service
+from app.capacity import StatusInterval
 from unittest.mock import MagicMock
 import datetime
 
@@ -38,4 +39,46 @@ def test_completed_sqlite_sync_releases_running_flag(tmp_path):
 
     assert result["status"] == "ok"
     assert repo.get_area_path(conn, area_path_id)["is_running"] == 0
+    conn.close()
+
+
+def test_sqlite_schema_persists_capacity_intervals_and_snapshot(tmp_path):
+    conn = db.SQLiteConnection(str(tmp_path / "capacity.sqlite3"))
+    db.init_schema(conn)
+    area_path_id = repo.create_area_path(conn, "org", "project", "project\\Area")
+    interval = StatusInterval(
+        work_item_id=1,
+        area_path_id=area_path_id,
+        revision=1,
+        work_item_type="Bug",
+        state="New",
+        started_at=datetime.datetime(2026, 7, 1, 9, 0),
+        ended_at=datetime.datetime(2026, 7, 2, 9, 0),
+    )
+
+    repo.replace_work_item_status_intervals(
+        conn, work_item_id=1, area_path_id=area_path_id, intervals=[interval]
+    )
+    repo.upsert_capacity_snapshot(
+        conn,
+        area_path_id=area_path_id,
+        payload={"forecast": {"expected": 1}},
+        generated_at=datetime.datetime(2026, 7, 2, 9, 0),
+    )
+    conn.commit()
+
+    assert repo.load_capacity_intervals(conn, area_path_id=area_path_id) == [
+        {
+            "work_item_id": 1,
+            "area_path_id": area_path_id,
+            "revision": 1,
+            "work_item_type": "Bug",
+            "state": "New",
+            "started_at": datetime.datetime(2026, 7, 1, 9, 0),
+            "ended_at": datetime.datetime(2026, 7, 2, 9, 0),
+        }
+    ]
+    assert repo.get_capacity_snapshot(conn, area_path_id=area_path_id) == {
+        "forecast": {"expected": 1}
+    }
     conn.close()

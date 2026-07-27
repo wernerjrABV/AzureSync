@@ -169,7 +169,7 @@ def test_db_error_mid_sync_rolls_back_before_recording_failure(db_conn):
     assert updated["is_running"] is False
 
 
-def test_first_sync_backfills_history_for_all_current_ids_and_marks_loaded(db_conn):
+def test_first_sync_with_missing_current_type_leaves_history_marker_unset(db_conn):
     row = _area_path_row(db_conn)
     client = MagicMock()
     client.get_all_ids.return_value = [1, 2]
@@ -196,7 +196,7 @@ def test_first_sync_backfills_history_for_all_current_ids_and_marks_loaded(db_co
     # first sync: history fetched for every current id (1 and 2), not just the changed one
     called_ids = sorted(call.args[0] for call in client.get_work_item_updates.call_args_list)
     assert called_ids == [1, 2]
-    assert repo.get_history_loaded_at(db_conn, row["id"]) is not None
+    assert repo.get_history_loaded_at(db_conn, row["id"]) is None
     with db_conn.cursor() as cur:
         cur.execute("SELECT COUNT(*) FROM work_item_history WHERE work_item_id IN (1, 2)")
         assert cur.fetchone()[0] == 2
@@ -379,3 +379,94 @@ def test_poisoned_history_retains_previous_capacity_snapshot(db_conn):
 
     assert result["status"] == "ok"
     assert repo.get_capacity_snapshot(db_conn, area_path_id=row["id"]) == previous
+
+
+def test_missing_current_work_item_type_retains_previous_capacity_snapshot(db_conn):
+    row = _area_path_row(db_conn)
+    previous = {"generated_at": "2026-07-01T09:00:00", "forecast": {"expected": 5}}
+    repo.upsert_capacity_snapshot(
+        db_conn,
+        area_path_id=row["id"],
+        payload=previous,
+        generated_at=datetime.datetime(2026, 7, 1, 9, 0),
+    )
+    db_conn.commit()
+
+    client = MagicMock()
+    client.get_all_ids.return_value = [1]
+    client.get_changed_ids.return_value = [1]
+    client.get_work_items_batch.return_value = []
+    client.get_work_item_updates.return_value = [
+        {
+            "rev": 1,
+            "revisedDate": "2026-07-02T09:00:00Z",
+            "fields": {"System.State": {"newValue": "New"}},
+        }
+    ]
+
+    result = sync_service.run_sync(db_conn, row, client)
+
+    assert result["status"] == "ok"
+    assert repo.get_capacity_snapshot(db_conn, area_path_id=row["id"]) == previous
+    assert repo.get_history_loaded_at(db_conn, row["id"]) is None
+
+
+def test_second_sync_rebuilds_capacity_from_all_stored_history_revisions(db_conn):
+    row = _area_path_row(db_conn)
+    first_client = MagicMock()
+    first_client.get_all_ids.return_value = [1]
+    first_client.get_changed_ids.return_value = [1]
+    first_client.get_work_items_batch.return_value = [
+        {
+            "id": 1,
+            "title": "A",
+            "work_item_type": "Bug",
+            "state": "Development",
+            "assigned_to": None,
+            "changed_date": datetime.datetime(2026, 6, 2),
+            "raw_json": "{}",
+        }
+    ]
+    first_client.get_work_item_updates.return_value = [
+        {
+            "rev": 1,
+            "revisedDate": "2026-06-01T09:00:00Z",
+            "fields": {"System.State": {"newValue": "New"}},
+        },
+        {
+            "rev": 2,
+            "revisedDate": "2026-06-02T09:00:00Z",
+            "fields": {"System.State": {"newValue": "Development"}},
+        },
+    ]
+    assert sync_service.run_sync(db_conn, row, first_client)["status"] == "ok"
+
+    second_client = MagicMock()
+    second_client.get_all_ids.return_value = [1]
+    second_client.get_changed_ids.return_value = [1]
+    second_client.get_work_items_batch.return_value = [
+        {
+            "id": 1,
+            "title": "A",
+            "work_item_type": "Bug",
+            "state": "Closed",
+            "assigned_to": None,
+            "changed_date": datetime.datetime(2026, 7, 1),
+            "raw_json": "{}",
+        }
+    ]
+    second_client.get_work_item_updates.return_value = [
+        {
+            "rev": 3,
+            "revisedDate": "2026-07-01T09:00:00Z",
+            "fields": {"System.State": {"newValue": "Closed"}},
+        }
+    ]
+
+    assert sync_service.run_sync(db_conn, row, second_client)["status"] == "ok"
+
+    intervals = repo.load_capacity_intervals(db_conn, area_path_id=row["id"])
+    assert [interval["revision"] for interval in intervals] == [1, 2, 3]
+    snapshot = repo.get_capacity_snapshot(db_conn, area_path_id=row["id"])
+    assert snapshot is not None
+    assert snapshot["monthly_throughput"][-1] == {"month": "2026-07", "count": 1}
