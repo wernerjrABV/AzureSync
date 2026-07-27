@@ -6,6 +6,8 @@ docs/adr/0003-read-only-api.md). This constraint is enforced mechanically by
 tests/test_readonly_guardrail.py.
 """
 
+import json
+
 import psycopg
 from psycopg.rows import dict_row
 
@@ -121,6 +123,20 @@ def get_work_item_details(
         history = cur.fetchall()
 
     return {"item": item, "history": history}
+
+
+def get_capacity_snapshot(conn: psycopg.Connection, *, area_path_id: int) -> dict | None:
+    with conn.cursor(row_factory=dict_row) as cur:
+        cur.execute(
+            "SELECT generated_at, payload FROM capacity_snapshots WHERE area_path_id = %s",
+            (area_path_id,),
+        )
+        snapshot = cur.fetchone()
+
+    if snapshot is not None and getattr(conn, "is_sqlite", False):
+        snapshot["payload"] = json.loads(snapshot["payload"])
+
+    return snapshot
 
 
 def list_features_tree(conn: psycopg.Connection, *, area_path_id: int) -> list[dict]:
