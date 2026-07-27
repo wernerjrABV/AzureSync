@@ -1,6 +1,6 @@
 import datetime
 
-from app.capacity import build_status_intervals, state_category
+from app.capacity import StatusInterval, build_capacity_snapshot, build_status_intervals, state_category
 
 
 def dt(value: str) -> datetime.datetime:
@@ -108,3 +108,110 @@ def test_build_status_intervals_ignores_malformed_revisions():
 
 def test_state_category_places_technical_analysis_downstream_for_extended_types():
     assert state_category("Feature", "Technical Analysis") == "downstream"
+
+
+def interval(
+    work_item_id: int, work_item_type: str, state: str, started_at: str, ended_at: str
+) -> StatusInterval:
+    return StatusInterval(
+        work_item_id=work_item_id,
+        area_path_id=3,
+        revision=1,
+        work_item_type=work_item_type,
+        state=state,
+        started_at=dt(started_at),
+        ended_at=dt(ended_at),
+    )
+
+
+def closed_story_intervals_for_monthly_counts(counts: list[int]) -> list[StatusInterval]:
+    intervals = []
+    item_id = 1
+    for month, count in zip(("2026-05", "2026-06", "2026-07"), counts):
+        for day in range(1, count + 1):
+            completed_at = f"{month}-{day:02d}T09:00:00"
+            intervals.append(
+                interval(item_id, "User Story", "Closed", completed_at, completed_at)
+            )
+            item_id += 1
+    return intervals
+
+
+def test_snapshot_uses_last_final_completion_and_quarterly_percentiles():
+    snapshot = build_capacity_snapshot(
+        area_path_id=3,
+        intervals=closed_story_intervals_for_monthly_counts([2, 4, 6]),
+        as_of=dt("2026-07-27T00:00:00"),
+    )
+
+    story = snapshot["by_type"]["User Story"]
+    assert story["forecast"] == {"conservative": 6, "expected": 12, "optimistic": 18}
+    assert story["is_reliable"] is True
+
+
+def test_snapshot_includes_exactly_twelve_zero_filled_calendar_months():
+    snapshot = build_capacity_snapshot(
+        area_path_id=3,
+        intervals=closed_story_intervals_for_monthly_counts([2, 4, 6]),
+        as_of=dt("2026-07-27T00:00:00"),
+    )
+
+    assert snapshot["monthly_throughput"] == [
+        {"month": "2025-08", "count": 0},
+        {"month": "2025-09", "count": 0},
+        {"month": "2025-10", "count": 0},
+        {"month": "2025-11", "count": 0},
+        {"month": "2025-12", "count": 0},
+        {"month": "2026-01", "count": 0},
+        {"month": "2026-02", "count": 0},
+        {"month": "2026-03", "count": 0},
+        {"month": "2026-04", "count": 0},
+        {"month": "2026-05", "count": 2},
+        {"month": "2026-06", "count": 4},
+        {"month": "2026-07", "count": 6},
+    ]
+
+
+def test_snapshot_marks_type_unreliable_with_fewer_than_three_delivery_months():
+    snapshot = build_capacity_snapshot(
+        area_path_id=3,
+        intervals=closed_story_intervals_for_monthly_counts([0, 2, 4]),
+        as_of=dt("2026-07-27T00:00:00"),
+    )
+
+    assert snapshot["by_type"]["User Story"]["is_reliable"] is False
+    assert snapshot["is_reliable"] is False
+
+
+def test_snapshot_calculates_forecasts_independently_per_work_item_type():
+    snapshot = build_capacity_snapshot(
+        area_path_id=3,
+        intervals=(
+            closed_story_intervals_for_monthly_counts([2, 4, 6])
+            + [
+                interval(100, "Bug", "Closed", "2026-05-01T09:00:00", "2026-05-01T09:00:00"),
+                interval(101, "Bug", "Closed", "2026-06-01T09:00:00", "2026-06-01T09:00:00"),
+                interval(102, "Bug", "Closed", "2026-07-01T09:00:00", "2026-07-01T09:00:00"),
+            ]
+        ),
+        as_of=dt("2026-07-27T00:00:00"),
+    )
+
+    assert snapshot["by_type"]["User Story"]["forecast"]["expected"] == 12
+    assert snapshot["by_type"]["Bug"]["forecast"]["expected"] == 3
+
+
+def test_snapshot_counts_reopened_item_only_at_its_last_final_transition():
+    snapshot = build_capacity_snapshot(
+        area_path_id=3,
+        intervals=[
+            interval(17, "User Story", "Closed", "2026-05-02T09:00:00", "2026-05-02T09:00:00"),
+            interval(17, "User Story", "Development", "2026-05-02T09:00:00", "2026-07-10T09:00:00"),
+            interval(17, "User Story", "Closed", "2026-07-10T09:00:00", "2026-07-10T09:00:00"),
+        ],
+        as_of=dt("2026-07-27T00:00:00"),
+    )
+
+    counts = {bucket["month"]: bucket["count"] for bucket in snapshot["monthly_throughput"]}
+    assert counts["2026-05"] == 0
+    assert counts["2026-07"] == 1

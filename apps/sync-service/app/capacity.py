@@ -1,4 +1,6 @@
 import datetime
+import math
+import statistics
 from dataclasses import dataclass
 
 
@@ -131,3 +133,151 @@ def build_status_intervals(
             )
         )
     return intervals
+
+
+def _month_starts_ending_at(as_of: datetime.datetime) -> list[datetime.datetime]:
+    month = as_of.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    months = []
+    for _ in range(12):
+        months.append(month)
+        month = (month - datetime.timedelta(days=1)).replace(day=1)
+    return list(reversed(months))
+
+
+def _month_key(value: datetime.datetime) -> str:
+    return value.strftime("%Y-%m")
+
+
+def _forecast(monthly_counts: list[int]) -> dict[str, int]:
+    deliveries = sorted(count for count in monthly_counts if count > 0)
+    if not deliveries:
+        return {"conservative": 0, "expected": 0, "optimistic": 0}
+
+    def percentile(percent: float) -> int:
+        return deliveries[math.ceil(percent * len(deliveries)) - 1]
+
+    return {
+        "conservative": math.floor(percentile(0.25) * 3),
+        "expected": math.floor(percentile(0.50) * 3),
+        "optimistic": math.floor(percentile(0.75) * 3),
+    }
+
+
+def _throughput_buckets(months: list[datetime.datetime], counts: dict[str, int]) -> list[dict]:
+    return [{"month": _month_key(month), "count": counts.get(_month_key(month), 0)} for month in months]
+
+
+def _flow_metrics(intervals: list[StatusInterval]) -> dict[str, dict]:
+    by_type: dict[str, list[StatusInterval]] = {}
+    for item in intervals:
+        by_type.setdefault(item.work_item_type, []).append(item)
+
+    result = {}
+    for work_item_type, type_intervals in by_type.items():
+        duration_by_state: dict[str, list[float]] = {}
+        for item in type_intervals:
+            duration_by_state.setdefault(item.state, []).append(
+                (item.ended_at - item.started_at).total_seconds()
+            )
+
+        median_by_state = {
+            state: statistics.median(durations)
+            for state, durations in sorted(duration_by_state.items())
+        }
+        upstream_seconds = sum(
+            duration
+            for state, duration in median_by_state.items()
+            if state_category(work_item_type, state) == "upstream"
+        )
+        downstream_seconds = sum(
+            duration
+            for state, duration in median_by_state.items()
+            if state_category(work_item_type, state) == "downstream"
+        )
+        result[work_item_type] = {
+            "by_status": median_by_state,
+            "upstream_seconds": upstream_seconds,
+            "downstream_seconds": downstream_seconds,
+            "development_cycle_seconds": upstream_seconds + downstream_seconds,
+        }
+    return result
+
+
+def build_capacity_snapshot(
+    *,
+    area_path_id: int,
+    intervals: list[StatusInterval],
+    as_of: datetime.datetime,
+) -> dict:
+    """Build a JSON-safe twelve-month capacity snapshot for one Area Path."""
+    area_intervals = [item for item in intervals if item.area_path_id == area_path_id]
+    months = _month_starts_ending_at(as_of)
+    month_keys = {_month_key(month) for month in months}
+
+    last_completions: dict[int, StatusInterval] = {}
+    for item in area_intervals:
+        if item.state not in FINAL_STATES or item.started_at != item.ended_at:
+            continue
+        previous = last_completions.get(item.work_item_id)
+        if previous is None or (item.ended_at, item.revision) > (
+            previous.ended_at,
+            previous.revision,
+        ):
+            last_completions[item.work_item_id] = item
+
+    counts_by_type: dict[str, dict[str, int]] = {}
+    total_counts: dict[str, int] = {}
+    for item in last_completions.values():
+        month = _month_key(item.ended_at)
+        if month not in month_keys:
+            continue
+        counts = counts_by_type.setdefault(item.work_item_type, {})
+        counts[month] = counts.get(month, 0) + 1
+        total_counts[month] = total_counts.get(month, 0) + 1
+
+    by_type = {}
+    warnings = []
+    for work_item_type, counts in sorted(counts_by_type.items()):
+        monthly_throughput = _throughput_buckets(months, counts)
+        monthly_counts = [bucket["count"] for bucket in monthly_throughput]
+        delivery_months = sum(count > 0 for count in monthly_counts)
+        is_reliable = delivery_months >= 3
+        by_type[work_item_type] = {
+            "monthly_throughput": monthly_throughput,
+            "forecast": _forecast(monthly_counts),
+            "delivery_months": delivery_months,
+            "is_reliable": is_reliable,
+        }
+        if not is_reliable:
+            warnings.append(
+                {
+                    "code": "insufficient_delivery_history",
+                    "work_item_type": work_item_type,
+                    "message": "At least three non-zero delivery months are required for a reliable forecast.",
+                }
+            )
+
+    monthly_throughput = _throughput_buckets(months, total_counts)
+    total_monthly_counts = [bucket["count"] for bucket in monthly_throughput]
+    delivery_months = sum(count > 0 for count in total_monthly_counts)
+    is_reliable = delivery_months >= 3
+    if not is_reliable:
+        warnings.append(
+            {
+                "code": "insufficient_delivery_history",
+                "message": "At least three non-zero delivery months are required for a reliable forecast.",
+            }
+        )
+
+    history_start = min((item.started_at for item in area_intervals), default=None)
+    return {
+        "generated_at": as_of.isoformat(),
+        "history_start": history_start.isoformat() if history_start else None,
+        "monthly_throughput": monthly_throughput,
+        "by_type": by_type,
+        "forecast": _forecast(total_monthly_counts),
+        "flow_metrics": _flow_metrics(area_intervals),
+        "warnings": warnings,
+        "delivery_months": delivery_months,
+        "is_reliable": is_reliable,
+    }
