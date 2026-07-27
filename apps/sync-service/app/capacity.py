@@ -216,7 +216,11 @@ def build_capacity_snapshot(
 
     last_completions: dict[int, StatusInterval] = {}
     for item in area_intervals:
-        if item.state not in FINAL_STATES or item.started_at != item.ended_at:
+        if (
+            item.state not in FINAL_STATES
+            or item.started_at != item.ended_at
+            or item.ended_at > as_of
+        ):
             continue
         previous = last_completions.get(item.work_item_id)
         if previous is None or (item.ended_at, item.revision) > (

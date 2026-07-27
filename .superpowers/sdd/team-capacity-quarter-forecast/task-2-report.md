@@ -40,5 +40,21 @@ forecasts, and reopening with a later final transition.
 
 The task worktree has pre-existing untracked coordination artifacts under
 `.superpowers/sdd/team-capacity-quarter-forecast/`; they were intentionally not
-included in the implementation commit. The report itself is left uncommitted
-for the parent task coordinator to collect with the other task reports.
+included in the implementation commit.
+
+## Fix round 1
+
+Filtered final completion candidates to `ended_at <= as_of` before selecting
+the last completion for each work item. This preserves an in-window final
+transition when a later final transition exists in the future. Added the
+corresponding regression test and parameterized the `Technical Analysis`
+downstream mapping test across Feature, Technical Feature, Incident, and
+Problem.
+
+Command:
+
+```powershell
+& 'C:\Projects\AzureSync\apps\sync-service\.venv\Scripts\python.exe' -m pytest tests/test_capacity.py -v
+```
+
+Output: `15 passed in 0.13s`.

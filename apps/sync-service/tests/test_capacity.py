@@ -1,5 +1,7 @@
 import datetime
 
+import pytest
+
 from app.capacity import StatusInterval, build_capacity_snapshot, build_status_intervals, state_category
 
 
@@ -106,8 +108,13 @@ def test_build_status_intervals_ignores_malformed_revisions():
     ]
 
 
-def test_state_category_places_technical_analysis_downstream_for_extended_types():
-    assert state_category("Feature", "Technical Analysis") == "downstream"
+@pytest.mark.parametrize(
+    "work_item_type", ["Feature", "Technical Feature", "Incident", "Problem"]
+)
+def test_state_category_places_technical_analysis_downstream_for_extended_types(
+    work_item_type: str,
+):
+    assert state_category(work_item_type, "Technical Analysis") == "downstream"
 
 
 def interval(
@@ -214,4 +221,18 @@ def test_snapshot_counts_reopened_item_only_at_its_last_final_transition():
 
     counts = {bucket["month"]: bucket["count"] for bucket in snapshot["monthly_throughput"]}
     assert counts["2026-05"] == 0
+    assert counts["2026-07"] == 1
+
+
+def test_snapshot_ignores_future_final_transition_when_selecting_last_completion():
+    snapshot = build_capacity_snapshot(
+        area_path_id=3,
+        intervals=[
+            interval(17, "User Story", "Closed", "2026-07-10T09:00:00", "2026-07-10T09:00:00"),
+            interval(17, "User Story", "Closed", "2026-08-01T09:00:00", "2026-08-01T09:00:00"),
+        ],
+        as_of=dt("2026-07-27T00:00:00"),
+    )
+
+    counts = {bucket["month"]: bucket["count"] for bucket in snapshot["monthly_throughput"]}
     assert counts["2026-07"] == 1
