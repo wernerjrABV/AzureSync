@@ -77,7 +77,7 @@ def state_from_update(update: dict) -> str | None:
     return field.get("newValue") if isinstance(field, dict) else None
 ~~~
 
-Sort revisions by rev, ignore records without a parseable revisedDate or state, and create intervals only where a next dated revision exists. Return no intervals for unsupported types or any item that ever reaches Canceled. Define state_category(type, state) from the approved table; keep Technical Analysis downstream.
+Sort revisions by rev, ignore records without a parseable revisedDate or state, and create bounded intervals where a next dated revision exists. Also emit a zero-duration final-state interval at the last valid revision so completion remains observable when no later revision exists. Return no intervals for unsupported types or any item that ever reaches Canceled. Define state_category(type, state) from the approved table; keep Technical Analysis downstream.
 
 - [ ] **Step 4: Add boundary tests and run them**
 
@@ -182,7 +182,7 @@ Add work_item_status_intervals with primary key (work_item_id, revision), area_p
 
 - [ ] **Step 4: Wire publishing into _do_sync and prove atomic behavior**
 
-After each successful history upsert, load its item's type, rebuild that item's intervals, and replace only that item's stored intervals. After the history loop, build and upsert the snapshot only if any_history_failed is False. On a failed history item, preserve the prior capacity_snapshots payload. Extend test_poison_history_item_does_not_block_other_items_or_checkpoint with that assertion and add a successful follow-up refresh assertion.
+After each successful history upsert, load all stored revisions for that item (not only the current delta), load its current type, rebuild its complete intervals, and replace only that item's stored intervals. After the history loop, build and upsert the snapshot only if any_history_failed is False. On a failed history item, preserve the prior capacity_snapshots payload. Extend test_poison_history_item_does_not_block_other_items_or_checkpoint with that assertion and add a successful follow-up refresh assertion.
 
 Run: cd apps/sync-service; pytest tests/test_db.py tests/test_repository.py tests/test_sync_service.py -v
 
