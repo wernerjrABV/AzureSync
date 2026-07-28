@@ -48,6 +48,7 @@ export default function CapacityFlowPage() {
   const now = useMemo(() => new Date(), []);
   const [areaPaths, setAreaPaths] = useState<AreaPath[]>([]);
   const [areaPathsLoaded, setAreaPathsLoaded] = useState(false);
+  const [areaPathsError, setAreaPathsError] = useState<string | null>(null);
   const [areaPathId, setAreaPathId] = useState<number | undefined>();
   const [selectedYear, setSelectedYear] = useState(String(now.getFullYear()));
   const [selectedQuarter, setSelectedQuarter] = useState(String(currentQuarter(now)));
@@ -69,8 +70,10 @@ export default function CapacityFlowPage() {
         setAreaPaths(paths);
         if (paths.length > 0) setAreaPathId(paths[0].id);
       })
-      .catch(() => {
-        if (active) setAreaPaths([]);
+      .catch((err: Error) => {
+        if (!active) return;
+        setAreaPaths([]);
+        setAreaPathsError(err.message);
       })
       .finally(() => {
         if (active) setAreaPathsLoaded(true);
@@ -116,6 +119,7 @@ export default function CapacityFlowPage() {
   })) : [];
   const statusRows = snapshot ? Object.entries(snapshot.flow_metrics).flatMap(([workItemType, value]) => (
     Object.entries(value.by_status).map(([status, seconds]) => ({
+      id: `${workItemType}:${status}`,
       workItemType,
       status,
       duration: formatDuration(seconds),
@@ -158,7 +162,15 @@ export default function CapacityFlowPage() {
 
         {!areaPathsLoaded && <Spinner label="Loading area paths" />}
 
-        {areaPathsLoaded && areaPaths.length === 0 && (
+        {areaPathsError && (
+          <Banner
+            status="error"
+            title="Error loading area paths"
+            description={areaPathsError}
+          />
+        )}
+
+        {areaPathsLoaded && !areaPathsError && areaPaths.length === 0 && (
           <EmptyState
             title="No area paths configured"
             description="Configure at least one area path in the sync service to see capacity forecasts."
@@ -270,7 +282,7 @@ export default function CapacityFlowPage() {
               {statusRows.length > 0 ? (
                 <Table
                   data={statusRows as TableRow[]}
-                  idKey="status"
+                  idKey="id"
                   density="balanced"
                   dividers="rows"
                   columns={[

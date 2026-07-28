@@ -48,3 +48,27 @@ the focused Task 5 tests and production build pass.
 
 The Vite build emits its existing large-chunk advisory for the generated bundle;
 it does not prevent a successful build.
+
+## Review fix â€” round 1
+
+- Kept the initial `fetchAreaPaths` failure distinct from an empty successful
+  response. The page now renders an `Error loading area paths` error Banner
+  with the API error message, and only shows `No area paths configured` after a
+  successful empty response.
+- Gave status-duration rows a composite `id` of work-item type plus status and
+  made it the Table `idKey`, so statuses shared across work-item types do not
+  collide.
+- Added focused page coverage for the initial area-path rejection, current
+  period request, quarter and area-path refetches, unreliable snapshots hiding
+  all forecast cards, and all 12 monthly throughput columns.
+
+Fresh verification after the fix:
+
+```text
+npm test -- --run CapacityFlowPage apiReadClient
+2 test files passed; 14 tests passed
+
+npm run build
+tsc -b && vite build
+âœ“ built in 8.58s
+```
