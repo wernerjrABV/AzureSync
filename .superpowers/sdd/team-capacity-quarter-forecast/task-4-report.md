@@ -29,3 +29,22 @@ C:\Projects\AzureSync\apps\api-read\.venv\Scripts\python.exe -m pytest tests/tes
 ```
 
 The read-only guardrail passed. No write SQL was added to `apps/api-read`.
+
+## Round 1 review fix
+
+- Tightened `/api/capacity` year validation to require four ASCII decimal
+  digits before opening the read connection or converting the value with
+  `int()`.
+- Added a regression test with the Unicode superscript-digit year `²²²²` and
+  a stored snapshot. Before the fix it reproduced the reviewer finding as a
+  `ValueError` during `int(year_text)`; it now returns HTTP 400.
+
+Verification rerun with the same focused API command:
+
+```text
+57 passed in 10.71s
+```
+
+The regression test was also run against the original `isdigit()` guard and
+failed with `ValueError` at `int(year_text)`, confirming the reported failure
+mode before the ASCII-safe guard was restored.

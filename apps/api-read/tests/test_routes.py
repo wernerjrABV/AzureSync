@@ -123,6 +123,23 @@ def test_get_capacity_rejects_missing_or_invalid_parameters(client, query):
     assert response.status_code == 400
 
 
+def test_get_capacity_rejects_unicode_digit_year_before_reading_snapshot(client, db_conn):
+    with db_conn.cursor() as cur:
+        cur.execute(
+            "INSERT INTO area_paths (organization, project, area_path) VALUES (%s, %s, %s) RETURNING id",
+            ("org", "proj", "proj\\A"),
+        )
+        area_path_id = cur.fetchone()[0]
+    db_conn.commit()
+    _seed_capacity_snapshot(db_conn, area_path_id=area_path_id, payload={"forecast": {}})
+
+    response = client.get(
+        f"/api/capacity?area_path_id={area_path_id}&year=%C2%B2%C2%B2%C2%B2%C2%B2&quarter=3"
+    )
+
+    assert response.status_code == 400
+
+
 def test_list_area_paths(client, db_conn):
     with db_conn.cursor() as cur:
         cur.execute(

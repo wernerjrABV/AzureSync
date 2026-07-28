@@ -154,7 +154,7 @@ def create_app(conn_factory=db.get_connection, sync_service_client=None) -> Flas
             area_path_id is None
             or area_path_id < 1
             or year_text is None
-            or not (year_text.isdigit() and len(year_text) == 4)
+            or not (year_text.isascii() and year_text.isdecimal() and len(year_text) == 4)
             or quarter is None
             or quarter not in range(1, 5)
         ):
