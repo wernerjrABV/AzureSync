@@ -23,7 +23,7 @@ cd apps/api-read
 uv venv
 uv pip install --python .venv\Scripts\python.exe -r requirements.txt
 .\.venv\Scripts\Activate.ps1
-set DATABASE_URL=postgresql://postgres:postgres@localhost:5432/azure_sync
+$env:DATABASE_URL='postgresql://postgres:postgres@localhost:5432/azure_sync'
 python .\run.py
 ```
 
