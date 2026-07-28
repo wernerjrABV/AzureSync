@@ -52,7 +52,7 @@ export default function App() {
             />
             <SideNavItem
               label="Capacity & Flow"
-              icon="chart"
+              icon="arrowsUpDown"
               isSelected={page === "capacity-flow"}
               onClick={() => setPage("capacity-flow")}
             />

@@ -53,4 +53,13 @@ describe("App navigation", () => {
       "wrench",
     );
   });
+
+  test("uses the Astryx flow icon for capacity", () => {
+    render(<App />);
+
+    expect(screen.getByRole("button", { name: "Capacity & Flow" })).toHaveAttribute(
+      "data-icon",
+      "arrowsUpDown",
+    );
+  });
 });
