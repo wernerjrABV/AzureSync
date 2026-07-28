@@ -39,9 +39,9 @@ this database from another app.
 ## Running tests
 
 Requires a local Postgres test database:
-```
+```powershell
 createdb azure_sync_test
-set TEST_DATABASE_URL=postgresql://postgres:postgres@localhost:5432/azure_sync_test
+$env:TEST_DATABASE_URL='postgresql://postgres:postgres@localhost:5432/azure_sync_test'
 pytest
 ```
 

@@ -58,9 +58,9 @@ Server starts on `http://127.0.0.1:5001` by default (override with
 
 ## Tests
 
-```bash
+```powershell
 createdb azure_sync_test
-set TEST_DATABASE_URL=postgresql://postgres:postgres@localhost:5432/azure_sync_test
+$env:TEST_DATABASE_URL='postgresql://postgres:postgres@localhost:5432/azure_sync_test'
 cd apps/sync-service && python -c "from app import db; c = db.get_connection(); db.init_schema(c); c.commit()"
 cd ../api-read
 .\.venv\Scripts\Activate.ps1

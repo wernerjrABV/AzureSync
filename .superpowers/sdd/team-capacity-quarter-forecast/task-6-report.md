@@ -125,3 +125,21 @@ The documented unrelated baseline failures remain outside this task:
 
 The targeted sync-service and api-read capacity-related suites passed, and the
 web production build passed.
+
+## Fix round 1
+
+Updated the sync-service and api-read test command examples to use PowerShell
+`$env:TEST_DATABASE_URL='...'` syntax consistently and labeled the code blocks
+as `powershell`. This is documentation-only; no application behavior changed.
+
+Command:
+
+```powershell
+git diff --check
+```
+
+Output:
+
+```text
+(no output; exit code 0)
+```
