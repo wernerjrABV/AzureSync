@@ -1,6 +1,8 @@
 import datetime
+import json
 
 from app import repository as repo
+from app.db import SQLiteConnection
 
 
 def _seed_area_path(conn, organization="org", project="proj", area_path="proj\\A"):
@@ -22,6 +24,18 @@ def _seed_work_item(conn, area_path_id, item_id, title, work_item_type, changed_
             VALUES (%s, %s, %s, %s, %s, %s, %s)
             """,
             (item_id, area_path_id, title, work_item_type, "Active", changed_date, "{}"),
+        )
+    conn.commit()
+
+
+def _seed_capacity_snapshot(conn, area_path_id, generated_at, payload):
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO capacity_snapshots (area_path_id, generated_at, payload)
+            VALUES (%s, %s, %s)
+            """,
+            (area_path_id, generated_at, json.dumps(payload)),
         )
     conn.commit()
 
@@ -364,3 +378,68 @@ def test_get_work_item_details(db_conn):
 
 def test_get_work_item_details_returns_none_for_missing_item(db_conn):
     assert repo.get_work_item_details(db_conn, work_item_id=999) is None
+
+
+def test_get_capacity_snapshot_returns_only_the_requested_area_snapshot(db_conn):
+    selected_area_path_id = _seed_area_path(db_conn, area_path="proj\\A")
+    other_area_path_id = _seed_area_path(db_conn, area_path="proj\\B")
+    _seed_capacity_snapshot(
+        db_conn,
+        selected_area_path_id,
+        "2026-07-27T15:30:00",
+        {"throughput": 8, "periods": [{"year": 2026, "quarter": 3}]},
+    )
+    _seed_capacity_snapshot(
+        db_conn,
+        other_area_path_id,
+        "2026-07-27T16:00:00",
+        {"throughput": 99},
+    )
+
+    snapshot = repo.get_capacity_snapshot(
+        db_conn, area_path_id=selected_area_path_id
+    )
+
+    assert snapshot == {
+        "generated_at": datetime.datetime(2026, 7, 27, 15, 30),
+        "payload": {"throughput": 8, "periods": [{"year": 2026, "quarter": 3}]},
+    }
+
+
+def test_get_capacity_snapshot_returns_none_when_the_area_has_no_snapshot(db_conn):
+    area_path_id = _seed_area_path(db_conn)
+
+    assert repo.get_capacity_snapshot(db_conn, area_path_id=area_path_id) is None
+
+
+def test_sqlite_connection_initializes_capacity_snapshots_schema(tmp_path):
+    conn = SQLiteConnection(tmp_path / "api-read.db")
+    conn.init_schema()
+
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT name FROM sqlite_master WHERE type = 'table' AND name = %s",
+                ("capacity_snapshots",),
+            )
+            assert cur.fetchone()[0] == "capacity_snapshots"
+    finally:
+        conn.close()
+
+
+def test_get_capacity_snapshot_parses_sqlite_json_payload(tmp_path):
+    conn = SQLiteConnection(tmp_path / "api-read.db")
+    conn.init_schema()
+    conn.connection.execute(
+        "INSERT INTO capacity_snapshots (area_path_id, generated_at, payload) VALUES (?, ?, ?)",
+        (7, "2026-07-27T15:30:00", '{"throughput": 8}'),
+    )
+    conn.commit()
+
+    try:
+        assert repo.get_capacity_snapshot(conn, area_path_id=7) == {
+            "generated_at": "2026-07-27T15:30:00",
+            "payload": {"throughput": 8},
+        }
+    finally:
+        conn.close()

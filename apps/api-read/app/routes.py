@@ -144,4 +144,34 @@ def create_app(conn_factory=db.get_connection, sync_service_client=None) -> Flas
         rows = repo.list_features_tree(conn, area_path_id=area_path_id)
         return jsonify({"data": rows})
 
+    @app.route("/api/capacity", methods=["GET"])
+    def get_capacity():
+        area_path_id = request.args.get("area_path_id", type=int)
+        year_text = request.args.get("year")
+        quarter = request.args.get("quarter", type=int)
+
+        if (
+            area_path_id is None
+            or area_path_id < 1
+            or year_text is None
+            or not (year_text.isascii() and year_text.isdecimal() and len(year_text) == 4)
+            or quarter is None
+            or quarter not in range(1, 5)
+        ):
+            return jsonify({"error": "area_path_id, year, and quarter are required and must be valid"}), 400
+
+        conn = open_connection()
+        snapshot = repo.get_capacity_snapshot(conn, area_path_id=area_path_id)
+        if snapshot is None:
+            return jsonify({"data": None})
+
+        return jsonify(
+            {
+                "data": {
+                    **snapshot["payload"],
+                    "selected_period": {"year": int(year_text), "quarter": quarter},
+                }
+            }
+        )
+
     return app

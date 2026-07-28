@@ -1,5 +1,6 @@
 from datetime import datetime
 from contextlib import contextmanager
+import json
 from urllib.error import HTTPError
 
 import pytest
@@ -38,6 +39,105 @@ def test_health_omits_cors_header_for_disallowed_origin(client):
     response = client.get("/health", headers={"Origin": "http://evil.example.com"})
 
     assert "Access-Control-Allow-Origin" not in response.headers
+
+
+def _seed_capacity_snapshot(conn, *, area_path_id, payload):
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO capacity_snapshots (area_path_id, generated_at, payload)
+            VALUES (%s, %s, %s)
+            """,
+            (area_path_id, "2026-07-27T15:30:00", json.dumps(payload)),
+        )
+    conn.commit()
+
+
+def test_get_capacity_returns_requested_area_snapshot_and_selected_period(client, db_conn):
+    with db_conn.cursor() as cur:
+        cur.execute(
+            "INSERT INTO area_paths (organization, project, area_path) VALUES (%s, %s, %s) RETURNING id",
+            ("org", "proj", "proj\\A"),
+        )
+        selected_area_path_id = cur.fetchone()[0]
+        cur.execute(
+            "INSERT INTO area_paths (organization, project, area_path) VALUES (%s, %s, %s) RETURNING id",
+            ("org", "proj", "proj\\B"),
+        )
+        other_area_path_id = cur.fetchone()[0]
+    db_conn.commit()
+    _seed_capacity_snapshot(
+        db_conn,
+        area_path_id=selected_area_path_id,
+        payload={"forecast": {"expected": 48}, "generated_at": "2026-07-27T15:30:00"},
+    )
+    _seed_capacity_snapshot(
+        db_conn,
+        area_path_id=other_area_path_id,
+        payload={"forecast": {"expected": 99}},
+    )
+
+    response = client.get(
+        f"/api/capacity?area_path_id={selected_area_path_id}&year=2026&quarter=3"
+    )
+
+    assert response.status_code == 200
+    assert response.get_json() == {
+        "data": {
+            "forecast": {"expected": 48},
+            "generated_at": "2026-07-27T15:30:00",
+            "selected_period": {"year": 2026, "quarter": 3},
+        }
+    }
+
+
+def test_get_capacity_returns_null_for_an_area_without_snapshot(client, db_conn):
+    with db_conn.cursor() as cur:
+        cur.execute(
+            "INSERT INTO area_paths (organization, project, area_path) VALUES (%s, %s, %s) RETURNING id",
+            ("org", "proj", "proj\\A"),
+        )
+        area_path_id = cur.fetchone()[0]
+    db_conn.commit()
+
+    response = client.get(f"/api/capacity?area_path_id={area_path_id}&year=2026&quarter=3")
+
+    assert response.status_code == 200
+    assert response.get_json() == {"data": None}
+
+
+@pytest.mark.parametrize(
+    "query",
+    [
+        "year=2026&quarter=3",
+        "area_path_id=1&quarter=3",
+        "area_path_id=1&year=not-a-year&quarter=3",
+        "area_path_id=1&year=2026&quarter=not-a-quarter",
+        "area_path_id=1&year=2026&quarter=0",
+        "area_path_id=1&year=2026&quarter=5",
+    ],
+)
+def test_get_capacity_rejects_missing_or_invalid_parameters(client, query):
+    response = client.get(f"/api/capacity?{query}")
+
+    assert response.status_code == 400
+
+
+def test_get_capacity_rejects_unicode_digit_year_before_reading_snapshot(client, db_conn):
+    with db_conn.cursor() as cur:
+        cur.execute(
+            "INSERT INTO area_paths (organization, project, area_path) VALUES (%s, %s, %s) RETURNING id",
+            ("org", "proj", "proj\\A"),
+        )
+        area_path_id = cur.fetchone()[0]
+    db_conn.commit()
+    _seed_capacity_snapshot(db_conn, area_path_id=area_path_id, payload={"forecast": {}})
+
+    response = client.get(
+        f"/api/capacity?area_path_id={area_path_id}&year=%C2%B2%C2%B2%C2%B2%C2%B2&quarter=3"
+    )
+
+    assert response.status_code == 400
 
 
 def test_list_area_paths(client, db_conn):

@@ -5,6 +5,7 @@ import type {
 } from "../models/workItem";
 import type { AreaPath } from "../models/areaPath";
 import type { FeatureTreeItem } from "../models/feature";
+import type { CapacitySnapshot } from "../models/capacity";
 
 const BASE_URL = import.meta.env.VITE_API_READ_BASE_URL ?? "http://127.0.0.1:5001";
 
@@ -58,6 +59,24 @@ export async function fetchFeaturesTree(areaPathId: number): Promise<FeatureTree
   );
   if (!response.ok) {
     throw new Error(`Failed to fetch features tree: ${response.status}`);
+  }
+  const body = await response.json();
+  return body.data;
+}
+
+export async function fetchCapacity(
+  areaPathId: number,
+  year: number,
+  quarter: number,
+): Promise<CapacitySnapshot | null> {
+  const query = new URLSearchParams({
+    area_path_id: String(areaPathId),
+    year: String(year),
+    quarter: String(quarter),
+  });
+  const response = await fetch(`${BASE_URL}/api/capacity?${query.toString()}`);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch capacity: ${response.status}`);
   }
   const body = await response.json();
   return body.data;

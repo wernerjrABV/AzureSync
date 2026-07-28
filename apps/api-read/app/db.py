@@ -34,6 +34,7 @@ class SQLiteConnection:
         CREATE TABLE IF NOT EXISTS area_paths (id INTEGER PRIMARY KEY, organization TEXT, project TEXT, area_path TEXT);
         CREATE TABLE IF NOT EXISTS work_items (id INTEGER PRIMARY KEY, area_path_id INTEGER, title TEXT, work_item_type TEXT, state TEXT, assigned_to TEXT, changed_date TEXT, parent_id INTEGER, raw_json TEXT, synced_at TEXT, start_date TEXT, target_date TEXT, created_date TEXT, activated_date TEXT, closed_date TEXT);
         CREATE TABLE IF NOT EXISTS work_item_history (work_item_id INTEGER, area_path_id INTEGER, rev INTEGER, revised_by TEXT, revised_date TEXT, raw_json TEXT, synced_at TEXT, PRIMARY KEY(work_item_id, rev));
+        CREATE TABLE IF NOT EXISTS capacity_snapshots (area_path_id INTEGER PRIMARY KEY, generated_at TEXT NOT NULL, payload TEXT NOT NULL);
         """)
 
 

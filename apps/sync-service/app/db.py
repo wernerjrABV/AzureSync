@@ -62,6 +62,23 @@ CREATE TABLE IF NOT EXISTS work_item_history (
     PRIMARY KEY (work_item_id, rev)
 );
 
+CREATE TABLE IF NOT EXISTS work_item_status_intervals (
+    work_item_id INTEGER NOT NULL,
+    area_path_id INTEGER NOT NULL REFERENCES area_paths(id),
+    revision INTEGER NOT NULL,
+    work_item_type TEXT NOT NULL,
+    state TEXT NOT NULL,
+    started_at TIMESTAMP NOT NULL,
+    ended_at TIMESTAMP NOT NULL,
+    PRIMARY KEY (work_item_id, revision)
+);
+
+CREATE TABLE IF NOT EXISTS capacity_snapshots (
+    area_path_id INTEGER PRIMARY KEY REFERENCES area_paths(id),
+    generated_at TIMESTAMP NOT NULL,
+    payload JSONB NOT NULL
+);
+
 ALTER TABLE area_paths ADD COLUMN IF NOT EXISTS last_error_msg TEXT;
 ALTER TABLE area_paths ADD COLUMN IF NOT EXISTS history_loaded_at TIMESTAMP;
 ALTER TABLE work_items ADD COLUMN IF NOT EXISTS parent_id INTEGER;
@@ -74,6 +91,8 @@ ALTER TABLE work_items ADD COLUMN IF NOT EXISTS closed_date TIMESTAMP;
 CREATE INDEX IF NOT EXISTS idx_work_items_area_path_id ON work_items (area_path_id);
 CREATE INDEX IF NOT EXISTS idx_work_items_area_path_changed_date ON work_items (area_path_id, changed_date DESC);
 CREATE INDEX IF NOT EXISTS idx_work_items_type ON work_items (work_item_type) WHERE work_item_type IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_work_item_status_intervals_area_type_ended_at
+    ON work_item_status_intervals (area_path_id, work_item_type, ended_at);
 """
 
 
@@ -154,4 +173,7 @@ CREATE TABLE IF NOT EXISTS work_items (id INTEGER PRIMARY KEY, area_path_id INTE
 CREATE TABLE IF NOT EXISTS sync_checkpoints (area_path_id INTEGER PRIMARY KEY, last_changed_date TIMESTAMP);
 CREATE TABLE IF NOT EXISTS sync_logs (id INTEGER PRIMARY KEY AUTOINCREMENT, area_path_id INTEGER NOT NULL, started_at TIMESTAMP NOT NULL, finished_at TIMESTAMP, status TEXT, items_processed INTEGER, error_msg TEXT);
 CREATE TABLE IF NOT EXISTS work_item_history (work_item_id INTEGER NOT NULL, area_path_id INTEGER NOT NULL, rev INTEGER NOT NULL, revised_by TEXT, revised_date TIMESTAMP, raw_json TEXT, synced_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (work_item_id, rev));
+CREATE TABLE IF NOT EXISTS work_item_status_intervals (work_item_id INTEGER NOT NULL, area_path_id INTEGER NOT NULL REFERENCES area_paths(id), revision INTEGER NOT NULL, work_item_type TEXT NOT NULL, state TEXT NOT NULL, started_at TIMESTAMP NOT NULL, ended_at TIMESTAMP NOT NULL, PRIMARY KEY (work_item_id, revision));
+CREATE TABLE IF NOT EXISTS capacity_snapshots (area_path_id INTEGER PRIMARY KEY REFERENCES area_paths(id), generated_at TIMESTAMP NOT NULL, payload TEXT NOT NULL);
+CREATE INDEX IF NOT EXISTS idx_work_item_status_intervals_area_type_ended_at ON work_item_status_intervals (area_path_id, work_item_type, ended_at);
 """

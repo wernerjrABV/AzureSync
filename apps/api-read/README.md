@@ -11,7 +11,7 @@ Read-only Flask API over the Postgres database populated by
   `tests/test_readonly_guardrail.py`.
 - No schema/DDL statements — schema is owned entirely by
   `apps/sync-service/app/db.py`.
-- Uses the same `DATABASE_URL` as sync-service today; configuration is loaded from the repository root `.env`.
+- Uses the same Windows `DATABASE_URL` environment variable as sync-service today; there is no dedicated
   read-only DB role yet (tracked as a known gap in
   `docs/adr/0003-read-only-api.md`).
 
@@ -23,7 +23,7 @@ cd apps/api-read
 uv venv
 uv pip install --python .venv\Scripts\python.exe -r requirements.txt
 .\.venv\Scripts\Activate.ps1
-set DATABASE_URL=postgresql://postgres:postgres@localhost:5432/azure_sync
+$env:DATABASE_URL='postgresql://postgres:postgres@localhost:5432/azure_sync'
 python .\run.py
 ```
 
@@ -49,11 +49,18 @@ Server starts on `http://127.0.0.1:5001` by default (override with
   paginated work item listing. See
   `packages/shared-contracts/work-item-listing.md` for the full contract.
 
+- `GET /api/capacity?area_path_id=<id>&year=<yyyy>&quarter=<1..4>` returns the
+  published capacity and flow snapshot for an area path and selected quarter.
+  It returns no snapshot until sync-service has completed the area's first
+  history backfill. Forecasts require at least three months of completed
+  eligible work; Canceled items are excluded, and reopened items count at
+  their final completion.
+
 ## Tests
 
-```bash
+```powershell
 createdb azure_sync_test
-set TEST_DATABASE_URL=postgresql://postgres:postgres@localhost:5432/azure_sync_test
+$env:TEST_DATABASE_URL='postgresql://postgres:postgres@localhost:5432/azure_sync_test'
 cd apps/sync-service && python -c "from app import db; c = db.get_connection(); db.init_schema(c); c.commit()"
 cd ../api-read
 .\.venv\Scripts\Activate.ps1

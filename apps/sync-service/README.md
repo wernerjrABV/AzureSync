@@ -20,7 +20,7 @@ this database from another app.
 ## Setup
 
 1. Set Windows environment variables:
-   - Put `DATABASE_URL` and `AZURE_DEVOPS_API_KEY` in the repository root `.env`.
+   - Set `DATABASE_URL` and `AZURE_DEVOPS_API_KEY` in the Windows environment.
    - `SQLITE_DATABASE_PATH` is optional and defaults to `apps/data/azure_sync.sqlite3`.
    - If PostgreSQL is not configured or cannot be reached, the service uses SQLite.
 2. Install dependencies:
@@ -39,11 +39,22 @@ this database from another app.
 ## Running tests
 
 Requires a local Postgres test database:
-```
+```powershell
 createdb azure_sync_test
-set TEST_DATABASE_URL=postgresql://postgres:postgres@localhost:5432/azure_sync_test
+$env:TEST_DATABASE_URL='postgresql://postgres:postgres@localhost:5432/azure_sync_test'
 pytest
 ```
+
+## Capacity snapshot publication
+
+Capacity and flow data is built from Azure DevOps revision history for each
+area path. The first complete history backfill must finish successfully before
+a capacity snapshot is published. Until then, the Capacity & Flow page has no
+forecast to show for that area path.
+
+A forecast is available only when at least three months contain completed
+eligible work. Canceled items are excluded. If an item is reopened, it counts
+only at its final completion.
 
 ## Usage
 

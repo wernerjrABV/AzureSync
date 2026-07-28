@@ -10,10 +10,11 @@ import { Banner } from "@astryxdesign/core/Banner";
 import WorkItemsListPage from "./pages/WorkItemsListPage";
 import FeaturesRoadmapPage from "./pages/FeaturesRoadmapPage";
 import SynchronizationPage from "./pages/SynchronizationPage";
+import CapacityFlowPage from "./pages/CapacityFlowPage";
 
 const INFO_MESSAGE = "";
 
-type Page = "work-items" | "features-roadmap" | "synchronization";
+type Page = "work-items" | "features-roadmap" | "synchronization" | "capacity-flow";
 
 export default function App() {
   const [page, setPage] = useState<Page>("work-items");
@@ -49,6 +50,12 @@ export default function App() {
               isSelected={page === "synchronization"}
               onClick={() => setPage("synchronization")}
             />
+            <SideNavItem
+              label="Capacity & Flow"
+              icon="chart"
+              isSelected={page === "capacity-flow"}
+              onClick={() => setPage("capacity-flow")}
+            />
           </SideNav>
         }
         banner={
@@ -59,8 +66,10 @@ export default function App() {
           <WorkItemsListPage />
         ) : page === "features-roadmap" ? (
           <FeaturesRoadmapPage />
-        ) : (
+        ) : page === "synchronization" ? (
           <SynchronizationPage />
+        ) : (
+          <CapacityFlowPage />
         )}
       </AppShell>
     </Theme>

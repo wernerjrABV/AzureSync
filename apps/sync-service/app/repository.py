@@ -4,6 +4,8 @@ import json
 import psycopg
 from psycopg.rows import dict_row
 
+from app.capacity import StatusInterval
+
 
 def create_area_path(
     conn: psycopg.Connection,
@@ -52,6 +54,8 @@ def delete_area_path(conn: psycopg.Connection, area_path_id: int) -> None:
     with conn.cursor() as cur:
         cur.execute("DELETE FROM sync_logs WHERE area_path_id = %s", (area_path_id,))
         cur.execute("DELETE FROM sync_checkpoints WHERE area_path_id = %s", (area_path_id,))
+        cur.execute("DELETE FROM capacity_snapshots WHERE area_path_id = %s", (area_path_id,))
+        cur.execute("DELETE FROM work_item_status_intervals WHERE area_path_id = %s", (area_path_id,))
         cur.execute("DELETE FROM work_items WHERE area_path_id = %s", (area_path_id,))
         cur.execute("DELETE FROM area_paths WHERE id = %s", (area_path_id,))
 
@@ -170,8 +174,16 @@ def delete_work_items(conn: psycopg.Connection, area_path_id: int, ids: set[int]
     with conn.cursor() as cur:
         if getattr(conn, "is_sqlite", False):
             marks = ",".join("%s" for _ in ids)
+            cur.execute(
+                f"DELETE FROM work_item_status_intervals WHERE area_path_id = %s AND work_item_id IN ({marks})",
+                [area_path_id, *ids],
+            )
             cur.execute(f"DELETE FROM work_items WHERE area_path_id = %s AND id IN ({marks})", [area_path_id, *ids])
         else:
+            cur.execute(
+                "DELETE FROM work_item_status_intervals WHERE area_path_id = %s AND work_item_id = ANY(%s)",
+                (area_path_id, list(ids)),
+            )
             cur.execute("DELETE FROM work_items WHERE area_path_id = %s AND id = ANY(%s)", (area_path_id, list(ids)))
 
 
@@ -243,6 +255,104 @@ def upsert_work_item_history(
                     json.dumps(update),
                 ),
             )
+
+
+def load_work_item_history(conn: psycopg.Connection, *, work_item_id: int) -> list[dict]:
+    with conn.cursor(row_factory=dict_row) as cur:
+        cur.execute(
+            "SELECT raw_json FROM work_item_history WHERE work_item_id = %s ORDER BY rev",
+            (work_item_id,),
+        )
+        rows = cur.fetchall()
+
+    updates = []
+    for row in rows:
+        raw_json = row["raw_json"]
+        updates.append(json.loads(raw_json) if isinstance(raw_json, str) else raw_json)
+    return updates
+
+
+def get_work_item_type(conn: psycopg.Connection, *, work_item_id: int) -> str | None:
+    with conn.cursor() as cur:
+        cur.execute("SELECT work_item_type FROM work_items WHERE id = %s", (work_item_id,))
+        row = cur.fetchone()
+        return row[0] if row else None
+
+
+def replace_work_item_status_intervals(
+    conn: psycopg.Connection,
+    *,
+    work_item_id: int,
+    area_path_id: int,
+    intervals: list[StatusInterval],
+) -> None:
+    with conn.cursor() as cur:
+        cur.execute(
+            "DELETE FROM work_item_status_intervals WHERE work_item_id = %s AND area_path_id = %s",
+            (work_item_id, area_path_id),
+        )
+        for interval in intervals:
+            cur.execute(
+                """
+                INSERT INTO work_item_status_intervals
+                    (work_item_id, area_path_id, revision, work_item_type, state, started_at, ended_at)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                """,
+                (
+                    work_item_id,
+                    area_path_id,
+                    interval.revision,
+                    interval.work_item_type,
+                    interval.state,
+                    interval.started_at,
+                    interval.ended_at,
+                ),
+            )
+
+
+def load_capacity_intervals(conn: psycopg.Connection, *, area_path_id: int) -> list[dict]:
+    with conn.cursor(row_factory=dict_row) as cur:
+        cur.execute(
+            """
+            SELECT work_item_id, area_path_id, revision, work_item_type, state, started_at, ended_at
+            FROM work_item_status_intervals
+            WHERE area_path_id = %s
+            ORDER BY work_item_id, revision
+            """,
+            (area_path_id,),
+        )
+        return cur.fetchall()
+
+
+def upsert_capacity_snapshot(
+    conn: psycopg.Connection,
+    *,
+    area_path_id: int,
+    payload: dict,
+    generated_at: datetime.datetime,
+) -> None:
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO capacity_snapshots (area_path_id, generated_at, payload)
+            VALUES (%s, %s, %s)
+            ON CONFLICT (area_path_id) DO UPDATE SET
+                generated_at = EXCLUDED.generated_at,
+                payload = EXCLUDED.payload
+            """,
+            (area_path_id, generated_at, json.dumps(payload)),
+        )
+
+
+def get_capacity_snapshot(conn: psycopg.Connection, *, area_path_id: int) -> dict | None:
+    with conn.cursor() as cur:
+        cur.execute("SELECT payload FROM capacity_snapshots WHERE area_path_id = %s", (area_path_id,))
+        row = cur.fetchone()
+
+    if row is None:
+        return None
+    payload = row[0]
+    return json.loads(payload) if isinstance(payload, str) else payload
 
 
 def set_history_loaded(conn: psycopg.Connection, area_path_id: int, when) -> None:
