@@ -25,9 +25,17 @@ npm run dev
 
 Requires `apps/api-read` running (default `http://127.0.0.1:5001`).
 For synchronization management, also run `apps/sync-service` (default
-`http://127.0.0.1:5000`). Configure either URL via `.env` using
-`VITE_API_READ_BASE_URL` and `VITE_SYNC_SERVICE_BASE_URL` (see
-`.env.example`).
+`http://127.0.0.1:5000`). Configure either URL with the Windows environment
+variables `VITE_API_READ_BASE_URL` and `VITE_SYNC_SERVICE_BASE_URL` before
+starting Vite.
+
+## Capacity & Flow
+
+The **Capacity & Flow** page reads the published snapshot from
+`GET /api/capacity?area_path_id=<id>&year=<yyyy>&quarter=<1..4>`. A forecast
+is unavailable until sync-service completes the area's first history backfill
+and at least three months contain completed eligible work. Canceled items are
+excluded; reopened items count only at their final completion.
 
 Run the automated tests with:
 
