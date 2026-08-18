@@ -1,3 +1,4 @@
+import sys
 from pathlib import Path
 
 from azuresync_launcher.paths import AppPaths, InstanceNames
@@ -18,6 +19,17 @@ def test_discovers_install_services_and_mutable_paths(tmp_path):
     assert paths.log_dir == local / "AzureSync" / "logs"
     assert paths.run_dir == local / "AzureSync" / "run"
     assert paths.stop_file == local / "AzureSync" / "run" / "stop.request"
+
+
+def test_non_frozen_discovery_defaults_to_repository_install_root(monkeypatch, tmp_path):
+    monkeypatch.setattr(sys, "frozen", False, raising=False)
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "LocalAppData"))
+
+    paths = AppPaths.discover()
+
+    assert paths.install_dir == Path(__file__).resolve().parents[3]
+    assert paths.install_dir.name == "AzureSync"
+    assert paths.sync_executable == paths.install_dir / "_services" / "sync-service" / "sync-service.exe"
 
 
 def test_instance_names_are_stable_and_do_not_include_data_root(tmp_path):
