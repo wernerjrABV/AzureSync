@@ -6,6 +6,7 @@ import pytest
 import requests
 
 from app.ado_client import AdoAuthError, AdoClient, AdoRetryExhaustedError
+from app.credential_protection import CredentialProtectionError
 
 
 def _response(status_code, json_body=None, headers=None):
@@ -107,7 +108,7 @@ def test_get_work_items_batch_requests_all_fields_via_expand(mock_post):
     client.get_work_items_batch([1])
 
     sent_body = mock_post.call_args.kwargs["json"]
-    assert sent_body["$expand"] == "fields"
+    assert sent_body["$expand"] == "all"
     assert "fields" not in sent_body
 
 
@@ -342,3 +343,30 @@ def test_get_work_items_batch_handles_missing_created_activated_closed_dates(moc
     assert item["created_date"] is None
     assert item["activated_date"] is None
     assert item["closed_date"] is None
+
+
+def test_auth_resolves_and_caches_pat_from_provider():
+    provider = MagicMock(return_value="stored-pat")
+
+    client = AdoClient("org", "project", pat_provider=provider)
+
+    assert client._auth() == ("", "stored-pat")
+    assert client._auth() == ("", "stored-pat")
+    provider.assert_called_once_with()
+
+
+def test_auth_reports_missing_credential_without_reading_environment():
+    client = AdoClient("org", "project", pat_provider=lambda: None)
+
+    with pytest.raises(AdoAuthError, match="not configured"):
+        client._auth()
+
+
+def test_auth_wraps_protection_failure_without_secret_material():
+    def fail():
+        raise CredentialProtectionError("stored credential cannot be decrypted")
+
+    with pytest.raises(AdoAuthError, match="cannot be decrypted") as error:
+        AdoClient("org", "project", pat_provider=fail)._auth()
+
+    assert "api_key" not in str(error.value).lower()

@@ -122,6 +122,20 @@ def test_auth_error_sets_status_and_releases_lock(db_conn):
     assert updated["is_running"] is False
 
 
+def test_missing_stored_credential_sets_auth_error_status(db_conn):
+    row = _area_path_row(db_conn)
+    client = AdoClient("org", "proj", pat_provider=lambda: None)
+
+    result = sync_service.run_sync(db_conn, row, client)
+    db_conn.commit()
+
+    assert result["status"] == "auth_error"
+    updated = repo.get_area_path(db_conn, row["id"])
+    assert updated["last_sync_status"] == "auth_error"
+    assert updated["last_error_msg"] == "Azure DevOps credential is not configured"
+    assert updated["is_running"] is False
+
+
 def test_retry_exhausted_sets_error_status(db_conn):
     row = _area_path_row(db_conn)
     client = MagicMock()

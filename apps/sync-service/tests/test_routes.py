@@ -1,11 +1,25 @@
 import datetime
 import threading
+import base64
 from unittest.mock import ANY, MagicMock, patch
 
 import pytest
 
-from app import db, repository as repo, routes
+from app import credentials, db, repository as repo, routes
+from app.credential_protection import CredentialProtectionError
 from app.routes import create_app
+
+
+class PrefixProtector:
+    def protect(self, plaintext: str) -> str:
+        return base64.b64encode(f"protected:{plaintext}".encode("utf-8")).decode("ascii")
+
+    def unprotect(self, protected_value: str) -> str:
+        prefix = "protected:"
+        decoded = base64.b64decode(protected_value, validate=True).decode("utf-8")
+        if not decoded.startswith(prefix):
+            raise CredentialProtectionError("stored credential cannot be decrypted")
+        return decoded[len(prefix) :]
 
 
 @pytest.fixture
@@ -22,8 +36,16 @@ def db_conn(sqlite_db_path):
 
 
 @pytest.fixture
-def client(db_conn, sqlite_db_path):
-    app = create_app(conn_factory=lambda: db.SQLiteConnection(sqlite_db_path))
+def protector():
+    return PrefixProtector()
+
+
+@pytest.fixture
+def client(db_conn, sqlite_db_path, protector):
+    app = create_app(
+        conn_factory=lambda: db.SQLiteConnection(sqlite_db_path),
+        credential_protector=protector,
+    )
     app.config["TESTING"] = True
     with app.test_client() as test_client:
         yield test_client
@@ -219,6 +241,83 @@ def test_api_delete_area_path_returns_no_content(client, db_conn):
     assert repo.get_area_path(db_conn, area_path_id) is None
 
 
+def test_api_credential_lifecycle_never_returns_secret(client):
+    assert client.get("/api/settings/azure-devops").get_json() == {
+        "configured": False,
+        "updated_at": None,
+    }
+
+    saved = client.put(
+        "/api/settings/azure-devops", json={"api_key": "browser-secret"}
+    )
+    assert saved.status_code == 200
+    assert saved.get_json()["configured"] is True
+    assert "browser-secret" not in saved.get_data(as_text=True)
+
+    loaded = client.get("/api/settings/azure-devops")
+    assert loaded.get_json()["configured"] is True
+    assert "browser-secret" not in loaded.get_data(as_text=True)
+
+    removed = client.delete("/api/settings/azure-devops")
+    assert removed.status_code == 204
+    assert client.get("/api/settings/azure-devops").get_json() == {
+        "configured": False,
+        "updated_at": None,
+    }
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        None,
+        {},
+        {"api_key": ""},
+        {"api_key": "   \t   "},
+        {"api_key": 1234},
+        {"api_key": "x" * 4097},
+    ],
+)
+def test_api_credential_put_rejects_invalid_payloads_without_echoing_input(client, payload):
+    response = client.put("/api/settings/azure-devops", json=payload)
+
+    assert response.status_code == 400
+    assert response.get_json() == {"error": "invalid Azure DevOps credential"}
+    submitted_value = payload.get("api_key") if isinstance(payload, dict) else None
+    if isinstance(submitted_value, str) and submitted_value:
+        assert submitted_value not in response.get_data(as_text=True)
+    elif submitted_value is not None and not isinstance(submitted_value, str):
+        assert str(submitted_value) not in response.get_data(as_text=True)
+
+
+def test_api_credential_put_rolls_back_and_hides_secret_when_protection_fails(
+    sqlite_db_path, db_conn
+):
+    class FailingProtector:
+        def protect(self, plaintext: str) -> str:
+            raise CredentialProtectionError("stored credential cannot be decrypted")
+
+        def unprotect(self, protected_value: str) -> str:
+            raise AssertionError("unprotect should not be called")
+
+    app = create_app(
+        conn_factory=lambda: db.SQLiteConnection(sqlite_db_path),
+        credential_protector=FailingProtector(),
+    )
+    app.config["TESTING"] = True
+
+    with app.test_client() as test_client:
+        response = test_client.put(
+            "/api/settings/azure-devops", json={"api_key": "top-secret"}
+        )
+
+    assert response.status_code == 500
+    assert response.get_json() == {"error": "credential could not be stored"}
+    body = response.get_data(as_text=True)
+    assert "top-secret" not in body
+    assert "decrypted" not in body
+    assert repo.get_app_setting(db_conn, "azure_devops_api_key") is None
+
+
 @pytest.mark.parametrize(
     "payload",
     [
@@ -284,10 +383,13 @@ def test_api_sync_starts_background_worker_without_running_sync_in_request(
 
     assert response.status_code == 202
     assert response.get_json() == {"status": "started"}
-    submitted_conn_factory, submitted_area_path_id = mock_start_manual_sync.call_args.args
+    submitted_conn_factory, submitted_area_path_id, submitted_protector = (
+        mock_start_manual_sync.call_args.args
+    )
     assert callable(submitted_conn_factory)
     assert submitted_conn_factory is not db_conn
     assert submitted_area_path_id == area_path_id
+    assert submitted_protector is not None
     mock_run_sync.assert_not_called()
 
 
@@ -327,32 +429,50 @@ def test_api_sync_returns_json_503_and_releases_reservation_when_queueing_fails(
 @patch("app.routes.AdoClient")
 @patch("app.routes.sync_service.run_sync")
 def test_manual_sync_worker_uses_its_own_connection_and_closes_it_on_success(
-    mock_run_sync, mock_ado_client, sqlite_db_path, db_conn
+    mock_run_sync, mock_ado_client, sqlite_db_path, db_conn, protector
 ):
     area_path_id = repo.create_area_path(db_conn, "org", "proj", "proj\\A")
+    credentials.save_api_key(db_conn, protector, "worker-secret")
     db_conn.commit()
     worker_conn = db.SQLiteConnection(sqlite_db_path)
     worker_conn.close = MagicMock(wraps=worker_conn.close)
+    captured = {}
+    fake_client = MagicMock(name="ado-client")
 
-    routes._run_manual_sync_worker(lambda: worker_conn, area_path_id)
+    def build_client(organization, project, **kwargs):
+        captured["organization"] = organization
+        captured["project"] = project
+        captured["pat_provider"] = kwargs["pat_provider"]
+        captured["resolved_pat"] = kwargs["pat_provider"]()
+        return fake_client
 
-    mock_ado_client.assert_called_once_with("org", "proj")
-    mock_run_sync.assert_called_once_with(worker_conn, ANY, mock_ado_client.return_value)
+    mock_ado_client.side_effect = build_client
+
+    routes._run_manual_sync_worker(lambda: worker_conn, area_path_id, protector)
+
+    assert captured == {
+        "organization": "org",
+        "project": "proj",
+        "pat_provider": ANY,
+        "resolved_pat": "worker-secret",
+    }
+    mock_run_sync.assert_called_once_with(worker_conn, ANY, fake_client)
     assert worker_conn.connection is not db_conn.connection
     worker_conn.close.assert_called_once()
 
 
 @patch("app.routes.sync_service.run_sync", side_effect=RuntimeError("sync exploded"))
 def test_manual_sync_worker_closes_its_connection_when_sync_errors(
-    mock_run_sync, sqlite_db_path, db_conn
+    mock_run_sync, sqlite_db_path, db_conn, protector
 ):
     area_path_id = repo.create_area_path(db_conn, "org", "proj", "proj\\A")
+    credentials.save_api_key(db_conn, protector, "worker-secret")
     db_conn.commit()
     worker_conn = db.SQLiteConnection(sqlite_db_path)
     worker_conn.close = MagicMock(wraps=worker_conn.close)
 
     with pytest.raises(RuntimeError, match="sync exploded"):
-        routes._run_manual_sync_worker(lambda: worker_conn, area_path_id)
+        routes._run_manual_sync_worker(lambda: worker_conn, area_path_id, protector)
 
     mock_run_sync.assert_called_once()
     worker_conn.close.assert_called_once()
@@ -373,7 +493,7 @@ def test_start_manual_sync_allows_only_one_concurrent_submission(monkeypatch):
 
     def start():
         barrier.wait()
-        results.append(routes.start_manual_sync(lambda: None, 42))
+        results.append(routes.start_manual_sync(lambda: None, 42, PrefixProtector()))
 
     workers = [threading.Thread(target=start) for _ in range(2)]
     for worker in workers:
@@ -383,5 +503,5 @@ def test_start_manual_sync_allows_only_one_concurrent_submission(monkeypatch):
         worker.join()
 
     assert sorted(results) == [False, True]
-    assert executor.submissions == [(routes._run_manual_sync_worker, ANY, 42)]
+    assert executor.submissions == [(routes._run_manual_sync_worker, ANY, 42, ANY)]
     routes._MANUAL_SYNC_IDS.discard(42)
