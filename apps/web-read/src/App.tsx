@@ -50,6 +50,12 @@ export default function App() {
               isSelected={page === "synchronization"}
               onClick={() => setPage("synchronization")}
             />
+            <SideNavItem
+              label="Capacity & Flow"
+              icon="arrowsUpDown"
+              isSelected={page === "capacity-flow"}
+              onClick={() => setPage("capacity-flow")}
+            />
           </SideNav>
         }
         banner={

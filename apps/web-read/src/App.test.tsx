@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 
 import "@testing-library/jest-dom/vitest";
-import { render, screen } from "@testing-library/react";
-import { beforeAll, describe, expect, test, vi } from "vitest";
+import { cleanup, render, screen } from "@testing-library/react";
+import { afterEach, beforeAll, describe, expect, test, vi } from "vitest";
 import App from "./App";
 
 vi.mock("./pages/WorkItemsListPage", () => ({
@@ -44,6 +44,10 @@ beforeAll(() => {
   });
 });
 
+afterEach(() => {
+  cleanup();
+});
+
 describe("App navigation", () => {
   test("uses the Astryx wrench icon for synchronization", () => {
     render(<App />);
@@ -54,9 +58,12 @@ describe("App navigation", () => {
     );
   });
 
-  test("hides capacity from the main sidebar", () => {
+  test("uses the Astryx flow icon for capacity", () => {
     render(<App />);
 
-    expect(screen.queryByRole("button", { name: "Capacity & Flow" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Capacity & Flow" })).toHaveAttribute(
+      "data-icon",
+      "arrowsUpDown",
+    );
   });
 });
