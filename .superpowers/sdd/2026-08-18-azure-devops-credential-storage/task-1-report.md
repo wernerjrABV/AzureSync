@@ -151,3 +151,69 @@ pytest tests/test_repository.py -k app_setting -v
 
 - SQLite: `3 passed, 3 deselected`
 - PostgreSQL-gated repository tests: `5 skipped, 21 deselected`
+
+### Reviewer issue 3: storage boundary accepted arbitrary short strings
+
+Problem:
+
+- The repository validation still accepted arbitrary short strings such as
+  `"cipher-one"` as `encrypted_value`, which is too weak for the intended DPAPI
+  ciphertext boundary.
+
+Test-first changes:
+
+- Updated the positive app-setting tests to use valid standard Base64 payloads:
+  - `Y2lwaGVyLW9uZQ==`
+  - `Y2lwaGVyLXR3bw==`
+- Added new SQLite and PostgreSQL-gated repository tests for:
+  - empty ciphertext rejection
+  - non-Base64 ciphertext rejection
+
+RED command:
+
+```powershell
+pytest tests/test_sqlite_fallback.py -k 'app_setting and (empty or non_base64 or persists)' -v
+```
+
+RED result:
+
+- `test_sqlite_schema_persists_replaces_and_deletes_app_setting` passed with valid Base64 fixtures
+- `test_sqlite_app_setting_rejects_empty_ciphertext` failed with
+  `Failed: DID NOT RAISE <class 'ValueError'>`
+- `test_sqlite_app_setting_rejects_non_base64_ciphertext` failed with
+  `Failed: DID NOT RAISE <class 'ValueError'>`
+
+Implementation:
+
+- Added strict Base64 validation in `repository.py` using
+  `base64.b64decode(..., validate=True)`.
+- Required `encrypted_value` to be:
+  - non-empty
+  - valid standard Base64
+  - canonical when re-encoded to Base64
+
+Error surfaced:
+
+- Invalid ciphertext now raises:
+  - `ValueError("app setting encrypted_value must be non-empty Base64")`
+
+Added/updated tests:
+
+- SQLite runnable coverage:
+  - `test_sqlite_schema_persists_replaces_and_deletes_app_setting`
+  - `test_sqlite_app_setting_rejects_empty_ciphertext`
+  - `test_sqlite_app_setting_rejects_non_base64_ciphertext`
+- PostgreSQL gated coverage:
+  - `test_app_setting_roundtrip_replaces_existing_value`
+  - `test_app_setting_rejects_empty_ciphertext`
+  - `test_app_setting_rejects_non_base64_ciphertext`
+
+GREEN result:
+
+```powershell
+pytest tests/test_sqlite_fallback.py -k app_setting -v
+pytest tests/test_repository.py -k app_setting -v
+```
+
+- SQLite: `5 passed, 3 deselected`
+- PostgreSQL-gated repository tests: `7 skipped, 21 deselected`

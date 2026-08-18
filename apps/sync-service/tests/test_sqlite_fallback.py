@@ -95,20 +95,20 @@ def test_sqlite_schema_persists_replaces_and_deletes_app_setting(tmp_path):
     repo.upsert_app_setting(
         conn,
         key="azure_devops_api_key",
-        encrypted_value="cipher-one",
+        encrypted_value="Y2lwaGVyLW9uZQ==",
         updated_at=first,
     )
     repo.upsert_app_setting(
         conn,
         key="azure_devops_api_key",
-        encrypted_value="cipher-two",
+        encrypted_value="Y2lwaGVyLXR3bw==",
         updated_at=second,
     )
     conn.commit()
 
     assert repo.get_app_setting(conn, "azure_devops_api_key") == {
         "key": "azure_devops_api_key",
-        "encrypted_value": "cipher-two",
+        "encrypted_value": "Y2lwaGVyLXR3bw==",
         "updated_at": second,
     }
     repo.delete_app_setting(conn, "azure_devops_api_key")
@@ -127,6 +127,40 @@ def test_sqlite_app_setting_rejects_unknown_key(tmp_path):
         repo.upsert_app_setting(
             conn,
             key="unexpected_key",
+            encrypted_value="Y2lwaGVyLW9uZQ==",
+            updated_at=datetime.datetime(2026, 8, 18, 10, 0),
+        )
+
+    conn.close()
+
+
+def test_sqlite_app_setting_rejects_empty_ciphertext(tmp_path):
+    conn = db.SQLiteConnection(str(tmp_path / "settings.sqlite3"))
+    db.init_schema(conn)
+
+    with pytest.raises(
+        ValueError, match="app setting encrypted_value must be non-empty Base64"
+    ):
+        repo.upsert_app_setting(
+            conn,
+            key="azure_devops_api_key",
+            encrypted_value="",
+            updated_at=datetime.datetime(2026, 8, 18, 10, 0),
+        )
+
+    conn.close()
+
+
+def test_sqlite_app_setting_rejects_non_base64_ciphertext(tmp_path):
+    conn = db.SQLiteConnection(str(tmp_path / "settings.sqlite3"))
+    db.init_schema(conn)
+
+    with pytest.raises(
+        ValueError, match="app setting encrypted_value must be non-empty Base64"
+    ):
+        repo.upsert_app_setting(
+            conn,
+            key="azure_devops_api_key",
             encrypted_value="cipher-one",
             updated_at=datetime.datetime(2026, 8, 18, 10, 0),
         )

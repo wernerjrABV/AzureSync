@@ -1,5 +1,7 @@
 import datetime
 import json
+import base64
+import binascii
 
 import psycopg
 from psycopg.rows import dict_row
@@ -418,3 +420,17 @@ def _validate_app_setting(*, key: str, encrypted_value: str) -> None:
         raise ValueError(
             "app setting encrypted_value must be at most 4096 characters"
         )
+    if not _is_strict_base64(encrypted_value):
+        raise ValueError(
+            "app setting encrypted_value must be non-empty Base64"
+        )
+
+
+def _is_strict_base64(value: str) -> bool:
+    if not value:
+        return False
+    try:
+        decoded = base64.b64decode(value, validate=True)
+    except (binascii.Error, ValueError):
+        return False
+    return bool(decoded) and base64.b64encode(decoded).decode("ascii") == value
