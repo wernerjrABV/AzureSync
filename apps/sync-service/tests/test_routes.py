@@ -267,6 +267,35 @@ def test_api_credential_lifecycle_never_returns_secret(client):
     }
 
 
+def test_api_credential_put_accepts_4096_char_plaintext_when_ciphertext_fits_storage_cap(
+    sqlite_db_path, db_conn
+):
+    class ExpandingProtector:
+        def protect(self, plaintext: str) -> str:
+            assert len(plaintext) == 4096
+            return "A" * 16384
+
+        def unprotect(self, protected_value: str) -> str:
+            raise AssertionError("unprotect should not be called")
+
+    app = create_app(
+        conn_factory=lambda: db.SQLiteConnection(sqlite_db_path),
+        credential_protector=ExpandingProtector(),
+    )
+    app.config["TESTING"] = True
+
+    with app.test_client() as test_client:
+        response = test_client.put(
+            "/api/settings/azure-devops", json={"api_key": "x" * 4096}
+        )
+
+    assert response.status_code == 200
+    assert response.get_json()["configured"] is True
+    assert repo.get_app_setting(db_conn, "azure_devops_api_key")["encrypted_value"] == (
+        "A" * 16384
+    )
+
+
 @pytest.mark.parametrize(
     "payload",
     [
