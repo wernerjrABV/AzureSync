@@ -8,7 +8,8 @@
   - `upsert_app_setting(conn, *, key, encrypted_value, updated_at)`
   - `delete_app_setting(conn, key)`
 - Tightened the storage boundary so only `azure_devops_api_key` is accepted and
-  `encrypted_value` must be 4096 characters or fewer; invalid input now raises
+  `encrypted_value` must be canonical Base64 within the repository-defined
+  ciphertext cap; invalid input now raises
   `ValueError` from `repository.py`.
 - Extended PostgreSQL test cleanup in `apps/sync-service/tests/conftest.py` to
   truncate `app_settings`, so app-setting tests do not leak data between cases.
@@ -128,10 +129,10 @@ Implementation:
 
 - Added repository validation for:
   - allowed key exactly `azure_devops_api_key`
-  - `encrypted_value` maximum length 4096
+  - bounded `encrypted_value` length at the repository storage cap
 - Invalid values now raise:
   - `ValueError("app setting key must be 'azure_devops_api_key'")`
-  - `ValueError("app setting encrypted_value must be at most 4096 characters")`
+  - `ValueError("app setting encrypted_value must be at most 16384 characters")`
 
 Added/updated tests:
 
@@ -191,6 +192,13 @@ Implementation:
   - non-empty
   - valid standard Base64
   - canonical when re-encoded to Base64
+
+Follow-up note:
+
+- The ciphertext length cap was later widened from 4096 to 16384 in Task 2
+  follow-up work because the 4096 limit was appropriate for plaintext PATs but
+  too small for Base64-encoded DPAPI ciphertext expansion. The repository still
+  enforces a finite, non-arbitrary maximum; only the stored ciphertext cap grew.
 
 Error surfaced:
 

@@ -485,14 +485,32 @@ def test_app_setting_rejects_unknown_key(db_conn):
         )
 
 
-def test_app_setting_rejects_values_longer_than_4096(db_conn):
+def test_app_setting_accepts_values_up_to_16384_chars(db_conn):
+    updated_at = datetime.datetime(2026, 8, 18, 10, 0, 0)
+
+    repo.upsert_app_setting(
+        db_conn,
+        key="azure_devops_api_key",
+        encrypted_value="A" * 16384,
+        updated_at=updated_at,
+    )
+    db_conn.commit()
+
+    assert repo.get_app_setting(db_conn, "azure_devops_api_key") == {
+        "key": "azure_devops_api_key",
+        "encrypted_value": "A" * 16384,
+        "updated_at": updated_at,
+    }
+
+
+def test_app_setting_rejects_values_longer_than_16384(db_conn):
     with pytest.raises(
-        ValueError, match="app setting encrypted_value must be at most 4096 characters"
+        ValueError, match="app setting encrypted_value must be at most 16384 characters"
     ):
         repo.upsert_app_setting(
             db_conn,
             key="azure_devops_api_key",
-            encrypted_value="x" * 4097,
+            encrypted_value="A" * 16388,
             updated_at=datetime.datetime(2026, 8, 18, 10, 0, 0),
         )
 

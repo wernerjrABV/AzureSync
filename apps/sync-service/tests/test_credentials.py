@@ -102,3 +102,35 @@ def test_save_api_key_rejects_invalid_values_before_protection(tmp_path, api_key
     assert protector.calls == []
     assert credentials.get_status(conn) == AzureDevOpsCredentialStatus(False, None)
     conn.close()
+
+
+class FixedCiphertextProtector:
+    def __init__(self, protected_value: str) -> None:
+        self.protected_value = protected_value
+        self.plaintexts = []
+
+    def protect(self, plaintext: str) -> str:
+        self.plaintexts.append(plaintext)
+        return self.protected_value
+
+    def unprotect(self, protected_value: str) -> str:
+        raise AssertionError("unprotect should not be called in storage-boundary tests")
+
+
+def test_save_api_key_accepts_4096_char_plaintext_when_ciphertext_fits_storage_cap(
+    tmp_path,
+):
+    conn = db.SQLiteConnection(str(tmp_path / "max-plaintext.sqlite3"))
+    db.init_schema(conn)
+    protector = FixedCiphertextProtector("A" * 16384)
+    plaintext = "x" * 4096
+
+    status = credentials.save_api_key(conn, protector, plaintext)
+    conn.commit()
+
+    assert status.configured is True
+    assert protector.plaintexts == [plaintext]
+    assert repo.get_app_setting(conn, credentials.SETTING_KEY)["encrypted_value"] == (
+        "A" * 16384
+    )
+    conn.close()

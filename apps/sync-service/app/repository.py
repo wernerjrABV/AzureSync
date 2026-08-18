@@ -8,8 +8,11 @@ from psycopg.rows import dict_row
 
 from app.capacity import StatusInterval
 
-APP_SETTING_AZURE_DEVOPS_API_KEY = "azure_devops_api_key"
-APP_SETTING_ENCRYPTED_VALUE_MAX_LENGTH = 4096
+APP_SETTING_CREDENTIAL_KEY = "azure_devops_api_key"
+# Plaintext PATs are capped separately at 4096 characters in credentials.py.
+# Stored ciphertext is Base64-encoded DPAPI output, so it needs headroom for
+# encryption metadata plus Base64 expansion while still remaining bounded.
+APP_SETTING_ENCRYPTED_VALUE_MAX_LENGTH = 16384
 
 
 def create_area_path(
@@ -412,13 +415,13 @@ def delete_app_setting(conn: psycopg.Connection, key: str) -> None:
 
 
 def _validate_app_setting(*, key: str, encrypted_value: str) -> None:
-    if key != APP_SETTING_AZURE_DEVOPS_API_KEY:
+    if key != APP_SETTING_CREDENTIAL_KEY:
         raise ValueError(
             "app setting key must be 'azure_devops_api_key'"
         )
     if len(encrypted_value) > APP_SETTING_ENCRYPTED_VALUE_MAX_LENGTH:
         raise ValueError(
-            "app setting encrypted_value must be at most 4096 characters"
+            "app setting encrypted_value must be at most 16384 characters"
         )
     if not _is_strict_base64(encrypted_value):
         raise ValueError(

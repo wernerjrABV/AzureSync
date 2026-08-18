@@ -23,7 +23,7 @@
   plaintext markers inside Base64 so the repository invariant remains intact.
 - The repository boundary continues to enforce:
   - allowed key exactly `azure_devops_api_key`
-  - maximum protected value length of 4096
+  - bounded Base64 ciphertext length of 16384
   - non-empty canonical Base64 protected values
 - Updated existing repository/storage tests to prove non-Base64 values still
   reject at the storage boundary.
@@ -155,6 +155,78 @@ Results:
 - SQLite app-setting regression slice: `5 passed, 3 deselected`
 - PostgreSQL-gated repository slice: `7 skipped, 21 deselected`
 - final credential verification slice: `7 passed`
+
+### Final review fix: separate plaintext and ciphertext size limits
+
+Final review issue:
+
+- The repository still capped stored Base64 ciphertext at 4096 characters.
+- That matched the plaintext PAT limit, but it is too small for realistic
+  DPAPI-protected and Base64-encoded ciphertext derived from a valid 4096-char
+  PAT.
+
+Design correction:
+
+- Kept the plaintext PAT limit in `credentials.py` at 4096 characters.
+- Widened only the repository storage cap for Base64 ciphertext to 16384
+  characters.
+- Chose 16384 as a safe bounded cap because Base64 encoding a 4096-byte input is
+  already about 5464 characters before DPAPI metadata overhead; 16384 leaves
+  substantial headroom for realistic DPAPI expansion while still preventing
+  arbitrarily oversized stored blobs.
+- No table shape change was required because `app_settings.encrypted_value`
+  already uses `TEXT`; the invariant is enforced at the repository boundary.
+
+RED evidence:
+
+```powershell
+pytest tests/test_credentials.py -v
+pytest tests/test_sqlite_fallback.py -k app_setting -v
+pytest tests/test_routes.py -k credential -v
+```
+
+RED results:
+
+- `test_save_api_key_accepts_4096_char_plaintext_when_ciphertext_fits_storage_cap`
+  failed because `repository.py` still rejected 16384-char Base64 ciphertext
+  with `ValueError("app setting encrypted_value must be at most 4096 characters")`
+- `test_sqlite_app_setting_accepts_values_up_to_16384_chars` failed for the same
+  reason
+- `test_sqlite_app_setting_rejects_values_longer_than_16384` failed because the
+  validation message still referenced 4096
+- `test_api_credential_put_accepts_4096_char_plaintext_when_ciphertext_fits_storage_cap`
+  failed because the request hit the same repository ceiling
+
+Implementation:
+
+- Updated `APP_SETTING_ENCRYPTED_VALUE_MAX_LENGTH` in `repository.py` from 4096
+  to 16384.
+- Updated the repository validation error message to
+  `app setting encrypted_value must be at most 16384 characters`.
+- Added tests covering:
+  - 4096-char plaintext accepted when ciphertext expands to exactly 16384 chars
+  - repository acceptance of 16384-char canonical Base64 ciphertext
+  - repository rejection above 16384 chars
+  - route acceptance of a 4096-char plaintext PAT when the protector expands it
+    to exactly 16384 chars
+
+GREEN verification:
+
+```powershell
+pytest tests/test_credentials.py -v
+pytest tests/test_sqlite_fallback.py -k app_setting -v
+pytest tests/test_routes.py -k credential -v
+pytest tests/test_repository.py -k app_setting -v
+pytest -v
+```
+
+Results:
+
+- credential service slice: `6 passed`
+- SQLite app-setting slice: `6 passed, 3 deselected`
+- credential route slice: `9 passed, 25 deselected`
+- PostgreSQL-gated repository slice: `8 skipped, 21 deselected`
+- full sync-service suite: `95 passed, 51 skipped`
 
 ### Notes
 

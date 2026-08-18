@@ -168,17 +168,38 @@ def test_sqlite_app_setting_rejects_non_base64_ciphertext(tmp_path):
     conn.close()
 
 
-def test_sqlite_app_setting_rejects_values_longer_than_4096(tmp_path):
+def test_sqlite_app_setting_accepts_values_up_to_16384_chars(tmp_path):
+    conn = db.SQLiteConnection(str(tmp_path / "settings.sqlite3"))
+    db.init_schema(conn)
+
+    repo.upsert_app_setting(
+        conn,
+        key="azure_devops_api_key",
+        encrypted_value="A" * 16384,
+        updated_at=datetime.datetime(2026, 8, 18, 10, 0),
+    )
+    conn.commit()
+
+    assert repo.get_app_setting(conn, "azure_devops_api_key") == {
+        "key": "azure_devops_api_key",
+        "encrypted_value": "A" * 16384,
+        "updated_at": datetime.datetime(2026, 8, 18, 10, 0),
+    }
+
+    conn.close()
+
+
+def test_sqlite_app_setting_rejects_values_longer_than_16384(tmp_path):
     conn = db.SQLiteConnection(str(tmp_path / "settings.sqlite3"))
     db.init_schema(conn)
 
     with pytest.raises(
-        ValueError, match="app setting encrypted_value must be at most 4096 characters"
+        ValueError, match="app setting encrypted_value must be at most 16384 characters"
     ):
         repo.upsert_app_setting(
             conn,
             key="azure_devops_api_key",
-            encrypted_value="x" * 4097,
+            encrypted_value="A" * 16388,
             updated_at=datetime.datetime(2026, 8, 18, 10, 0),
         )
 
