@@ -28,7 +28,7 @@ class AppPaths:
             if getattr(sys, "frozen", False):
                 executable = Path(sys.executable)
             else:
-                executable = Path(__file__).resolve().parents[2] / "AzureSync.exe"
+                executable = Path(__file__).resolve().parents[3] / "AzureSync.exe"
         executable_path = Path(executable)
         install_dir = executable_path.parent
 
