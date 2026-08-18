@@ -168,3 +168,32 @@ Results:
 - The focused SQLite-backed route/scheduler tests still emit the pre-existing Python
   sqlite datetime adapter deprecation warning from `app/db.py`; Task 3 does not modify
   that baseline.
+
+### Reviewer follow-up fix
+
+Reviewer issue:
+
+- the sync-service operator banner in `apps/sync-service/app/templates/index.html`
+  still instructed users to set `AZURE_DEVOPS_API_KEY`, even though Task 3 moved
+  credential management into the synchronization settings flow
+- `tests/test_routes.py::test_index_shows_auth_error_banner` was locking in that
+  obsolete guidance
+
+Test-first correction:
+
+- updated the banner assertion to require the synchronization-settings guidance and
+  explicitly reject `AZURE_DEVOPS_API_KEY`
+- updated the template banner text to direct operators to refresh the credential in
+  the synchronization settings flow rather than using an environment variable
+
+Verification:
+
+```powershell
+pytest tests/test_routes.py -k auth_error_banner -v
+pytest tests/test_routes.py -v
+```
+
+Results:
+
+- auth-error banner slice: `1 passed, 32 deselected`
+- full routes regression: `33 passed`

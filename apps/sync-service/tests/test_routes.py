@@ -68,7 +68,8 @@ def test_index_shows_auth_error_banner(client, db_conn):
 
     response = client.get("/")
 
-    assert b"AZURE_DEVOPS_API_KEY" in response.data
+    assert "Configurações de sincronização".encode("utf-8") in response.data
+    assert b"AZURE_DEVOPS_API_KEY" not in response.data
 
 
 def test_create_area_path(client, db_conn):
