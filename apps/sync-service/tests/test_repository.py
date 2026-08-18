@@ -519,7 +519,7 @@ def test_app_setting_cleanup_isolates_between_tests(db_conn):
 
 def test_app_setting_rejects_empty_ciphertext(db_conn):
     with pytest.raises(
-        ValueError, match="app setting encrypted_value must be non-empty Base64"
+        ValueError, match="app setting encrypted_value must be non-empty"
     ):
         repo.upsert_app_setting(
             db_conn,
@@ -529,13 +529,19 @@ def test_app_setting_rejects_empty_ciphertext(db_conn):
         )
 
 
-def test_app_setting_rejects_non_base64_ciphertext(db_conn):
-    with pytest.raises(
-        ValueError, match="app setting encrypted_value must be non-empty Base64"
-    ):
-        repo.upsert_app_setting(
-            db_conn,
-            key="azure_devops_api_key",
-            encrypted_value="cipher-one",
-            updated_at=datetime.datetime(2026, 8, 18, 10, 0, 0),
-        )
+def test_app_setting_accepts_opaque_ciphertext(db_conn):
+    updated_at = datetime.datetime(2026, 8, 18, 10, 0, 0)
+
+    repo.upsert_app_setting(
+        db_conn,
+        key="azure_devops_api_key",
+        encrypted_value="cipher-one",
+        updated_at=updated_at,
+    )
+    db_conn.commit()
+
+    assert repo.get_app_setting(db_conn, "azure_devops_api_key") == {
+        "key": "azure_devops_api_key",
+        "encrypted_value": "cipher-one",
+        "updated_at": updated_at,
+    }
