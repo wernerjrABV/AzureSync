@@ -82,3 +82,34 @@ def test_sqlite_schema_persists_capacity_intervals_and_snapshot(tmp_path):
         "forecast": {"expected": 1}
     }
     conn.close()
+
+
+def test_sqlite_schema_persists_replaces_and_deletes_app_setting(tmp_path):
+    conn = db.SQLiteConnection(str(tmp_path / "settings.sqlite3"))
+    db.init_schema(conn)
+    first = datetime.datetime(2026, 8, 18, 10, 0)
+    second = datetime.datetime(2026, 8, 18, 11, 0)
+
+    repo.upsert_app_setting(
+        conn,
+        key="azure_devops_api_key",
+        encrypted_value="cipher-one",
+        updated_at=first,
+    )
+    repo.upsert_app_setting(
+        conn,
+        key="azure_devops_api_key",
+        encrypted_value="cipher-two",
+        updated_at=second,
+    )
+    conn.commit()
+
+    assert repo.get_app_setting(conn, "azure_devops_api_key") == {
+        "key": "azure_devops_api_key",
+        "encrypted_value": "cipher-two",
+        "updated_at": second,
+    }
+    repo.delete_app_setting(conn, "azure_devops_api_key")
+    conn.commit()
+    assert repo.get_app_setting(conn, "azure_devops_api_key") is None
+    conn.close()

@@ -440,3 +440,33 @@ def test_capacity_snapshot_roundtrip_replaces_existing_payload(db_conn):
     assert repo.get_capacity_snapshot(db_conn, area_path_id=area_path_id) == {
         "forecast": {"expected": 6}
     }
+
+
+def test_app_setting_roundtrip_replaces_existing_value(db_conn):
+    first = datetime.datetime(2026, 8, 18, 10, 0, 0)
+    second = datetime.datetime(2026, 8, 18, 11, 0, 0)
+
+    repo.upsert_app_setting(
+        db_conn,
+        key="azure_devops_api_key",
+        encrypted_value="cipher-one",
+        updated_at=first,
+    )
+    repo.upsert_app_setting(
+        db_conn,
+        key="azure_devops_api_key",
+        encrypted_value="cipher-two",
+        updated_at=second,
+    )
+    db_conn.commit()
+
+    assert repo.get_app_setting(db_conn, "azure_devops_api_key") == {
+        "key": "azure_devops_api_key",
+        "encrypted_value": "cipher-two",
+        "updated_at": second,
+    }
+
+    repo.delete_app_setting(db_conn, "azure_devops_api_key")
+    db_conn.commit()
+
+    assert repo.get_app_setting(db_conn, "azure_devops_api_key") is None
