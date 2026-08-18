@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import pytest
+
 from app import db
 from app import config
 from app import repository as repo
@@ -112,4 +114,38 @@ def test_sqlite_schema_persists_replaces_and_deletes_app_setting(tmp_path):
     repo.delete_app_setting(conn, "azure_devops_api_key")
     conn.commit()
     assert repo.get_app_setting(conn, "azure_devops_api_key") is None
+    conn.close()
+
+
+def test_sqlite_app_setting_rejects_unknown_key(tmp_path):
+    conn = db.SQLiteConnection(str(tmp_path / "settings.sqlite3"))
+    db.init_schema(conn)
+
+    with pytest.raises(
+        ValueError, match="app setting key must be 'azure_devops_api_key'"
+    ):
+        repo.upsert_app_setting(
+            conn,
+            key="unexpected_key",
+            encrypted_value="cipher-one",
+            updated_at=datetime.datetime(2026, 8, 18, 10, 0),
+        )
+
+    conn.close()
+
+
+def test_sqlite_app_setting_rejects_values_longer_than_4096(tmp_path):
+    conn = db.SQLiteConnection(str(tmp_path / "settings.sqlite3"))
+    db.init_schema(conn)
+
+    with pytest.raises(
+        ValueError, match="app setting encrypted_value must be at most 4096 characters"
+    ):
+        repo.upsert_app_setting(
+            conn,
+            key="azure_devops_api_key",
+            encrypted_value="x" * 4097,
+            updated_at=datetime.datetime(2026, 8, 18, 10, 0),
+        )
+
     conn.close()

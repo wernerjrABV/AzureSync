@@ -6,6 +6,9 @@ from psycopg.rows import dict_row
 
 from app.capacity import StatusInterval
 
+APP_SETTING_AZURE_DEVOPS_API_KEY = "azure_devops_api_key"
+APP_SETTING_ENCRYPTED_VALUE_MAX_LENGTH = 4096
+
 
 def create_area_path(
     conn: psycopg.Connection,
@@ -387,6 +390,7 @@ def upsert_app_setting(
     encrypted_value: str,
     updated_at: datetime.datetime,
 ) -> None:
+    _validate_app_setting(key=key, encrypted_value=encrypted_value)
     with conn.cursor() as cur:
         cur.execute(
             """
@@ -403,3 +407,14 @@ def upsert_app_setting(
 def delete_app_setting(conn: psycopg.Connection, key: str) -> None:
     with conn.cursor() as cur:
         cur.execute("DELETE FROM app_settings WHERE key = %s", (key,))
+
+
+def _validate_app_setting(*, key: str, encrypted_value: str) -> None:
+    if key != APP_SETTING_AZURE_DEVOPS_API_KEY:
+        raise ValueError(
+            "app setting key must be 'azure_devops_api_key'"
+        )
+    if len(encrypted_value) > APP_SETTING_ENCRYPTED_VALUE_MAX_LENGTH:
+        raise ValueError(
+            "app setting encrypted_value must be at most 4096 characters"
+        )
