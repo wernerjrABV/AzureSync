@@ -139,7 +139,7 @@ def test_sqlite_app_setting_rejects_empty_ciphertext(tmp_path):
     db.init_schema(conn)
 
     with pytest.raises(
-        ValueError, match="app setting encrypted_value must be non-empty Base64"
+        ValueError, match="app setting encrypted_value must be non-empty"
     ):
         repo.upsert_app_setting(
             conn,
@@ -151,19 +151,23 @@ def test_sqlite_app_setting_rejects_empty_ciphertext(tmp_path):
     conn.close()
 
 
-def test_sqlite_app_setting_rejects_non_base64_ciphertext(tmp_path):
+def test_sqlite_app_setting_accepts_opaque_ciphertext(tmp_path):
     conn = db.SQLiteConnection(str(tmp_path / "settings.sqlite3"))
     db.init_schema(conn)
 
-    with pytest.raises(
-        ValueError, match="app setting encrypted_value must be non-empty Base64"
-    ):
-        repo.upsert_app_setting(
-            conn,
-            key="azure_devops_api_key",
-            encrypted_value="cipher-one",
-            updated_at=datetime.datetime(2026, 8, 18, 10, 0),
-        )
+    repo.upsert_app_setting(
+        conn,
+        key="azure_devops_api_key",
+        encrypted_value="cipher-one",
+        updated_at=datetime.datetime(2026, 8, 18, 10, 0),
+    )
+    conn.commit()
+
+    assert repo.get_app_setting(conn, "azure_devops_api_key") == {
+        "key": "azure_devops_api_key",
+        "encrypted_value": "cipher-one",
+        "updated_at": datetime.datetime(2026, 8, 18, 10, 0),
+    }
 
     conn.close()
 
