@@ -197,3 +197,39 @@ Results:
 
 - auth-error banner slice: `1 passed, 32 deselected`
 - full routes regression: `33 passed`
+
+### Reviewer follow-up fix — README cleanup
+
+Reviewer issue:
+
+- `apps/sync-service/README.md` still told operators to set `AZURE_DEVOPS_API_KEY`
+  during setup and auth-error remediation, which no longer matches the Task 3
+  credential flow
+
+Correction:
+
+- updated setup instructions so only `DATABASE_URL` remains required as an
+  environment variable for this flow
+- documented that Azure DevOps credentials are now configured through the
+  synchronization settings flow or `/api/settings/azure-devops`
+- updated the auth-error remediation text to direct operators to refresh the
+  stored credential rather than using an environment variable
+
+Why no new automated test was added:
+
+- this issue is isolated to README prose
+- there is no existing README consumer test in this repo that would verify
+  behavior rather than merely grep source text, so adding one here would be a
+  brittle documentation-text test rather than a meaningful product-level test
+
+Verification:
+
+```powershell
+rg -n "AZURE_DEVOPS_API_KEY|/api/settings/azure-devops|synchronization settings" apps/sync-service/README.md
+```
+
+Result:
+
+- README no longer instructs operators to set `AZURE_DEVOPS_API_KEY`
+- README now points setup/remediation to the synchronization settings flow and
+  `/api/settings/azure-devops`
