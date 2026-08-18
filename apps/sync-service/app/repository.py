@@ -369,3 +369,37 @@ def get_history_loaded_at(conn: psycopg.Connection, area_path_id: int):
         )
         row = cur.fetchone()
         return row[0] if row else None
+
+
+def get_app_setting(conn: psycopg.Connection, key: str) -> dict | None:
+    with conn.cursor(row_factory=dict_row) as cur:
+        cur.execute(
+            "SELECT key, encrypted_value, updated_at FROM app_settings WHERE key = %s",
+            (key,),
+        )
+        return cur.fetchone()
+
+
+def upsert_app_setting(
+    conn: psycopg.Connection,
+    *,
+    key: str,
+    encrypted_value: str,
+    updated_at: datetime.datetime,
+) -> None:
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO app_settings (key, encrypted_value, updated_at)
+            VALUES (%s, %s, %s)
+            ON CONFLICT (key) DO UPDATE SET
+                encrypted_value = EXCLUDED.encrypted_value,
+                updated_at = EXCLUDED.updated_at
+            """,
+            (key, encrypted_value, updated_at),
+        )
+
+
+def delete_app_setting(conn: psycopg.Connection, key: str) -> None:
+    with conn.cursor() as cur:
+        cur.execute("DELETE FROM app_settings WHERE key = %s", (key,))
