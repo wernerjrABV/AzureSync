@@ -1,10 +1,11 @@
+from pathlib import Path
 from datetime import date, datetime
 
-from flask import Flask, g, jsonify, request
+from flask import Flask, g, jsonify, request, send_from_directory
 from flask.json.provider import DefaultJSONProvider
 
 from app import db, repository as repo
-from app.config import get_cors_allowed_origins
+from app.config import get_cors_allowed_origins, get_web_dist_path
 from app.sync_service_client import SyncServiceClient, SyncServiceUnavailable
 
 
@@ -27,9 +28,14 @@ class ISODateJSONProvider(DefaultJSONProvider):
         return DefaultJSONProvider.default(obj)
 
 
-def create_app(conn_factory=db.get_connection, sync_service_client=None) -> Flask:
-    app = Flask(__name__)
+def create_app(
+    conn_factory=db.get_connection,
+    sync_service_client=None,
+    web_dist_path: str | Path | None = None,
+) -> Flask:
+    app = Flask(__name__, static_folder=None)
     sync_service_client = sync_service_client or SyncServiceClient()
+    web_root = _resolve_web_root(web_dist_path)
 
     def open_connection():
         conn = conn_factory()
@@ -188,4 +194,27 @@ def create_app(conn_factory=db.get_connection, sync_service_client=None) -> Flas
             }
         )
 
+    if web_root is not None:
+
+        @app.route("/", defaults={"path": ""})
+        @app.route("/<path:path>")
+        def serve_web(path: str):
+            if path == "api" or path.startswith("api/"):
+                return jsonify({"error": "not found"}), 404
+            if path and (web_root / path).is_file():
+                return send_from_directory(web_root, path)
+            return send_from_directory(web_root, "index.html")
+
     return app
+
+
+def _resolve_web_root(web_dist_path: str | Path | None) -> Path | None:
+    configured_path = web_dist_path or get_web_dist_path()
+    if configured_path is None:
+        return None
+
+    web_root = Path(configured_path).resolve()
+    if not web_root.exists() or not web_root.is_dir():
+        raise ValueError(f"Web dist path does not exist: {web_root}")
+
+    return web_root
