@@ -79,11 +79,11 @@ class FakeStopEvent:
     def __init__(self):
         self._is_set = False
 
-    def is_set(self) -> bool:
-        return self._is_set
-
     def set(self) -> None:
         self._is_set = True
+
+    def wait(self, timeout_ms: int) -> bool:
+        return self._is_set
 
 
 class Clock:
@@ -237,6 +237,18 @@ def test_stop_event_requests_graceful_child_shutdown(
     assert paths.stop_file.exists() is False
     assert all(process.wait_timeout == 30.0 for process in supervisor_harness.processes)
     assert supervisor_harness.job.closed is True
+
+
+def test_monitor_uses_real_event_wait_contract(supervisor_harness, paths: AppPaths):
+    supervisor_harness.supervisor.start()
+
+    supervisor_harness.processes[0].wait_result = 0
+    supervisor_harness.processes[1].wait_result = 0
+    supervisor_harness.stop_event.set()
+    supervisor_harness.supervisor.monitor_until_stop()
+
+    assert paths.stop_file.exists() is False
+    assert all(process.wait_timeout == 30.0 for process in supervisor_harness.processes)
 
 
 def test_child_crash_stops_peer_and_reports_log(supervisor_harness):

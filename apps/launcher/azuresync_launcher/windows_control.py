@@ -110,6 +110,9 @@ class NamedEvent(_Handle):
             return False
         _raise_last_error("WaitForSingleObject failed")
 
+    def is_set(self) -> bool:
+        return self.wait(0)
+
 
 class _BasicLimitInformation(ctypes.Structure):
     _fields_ = [("PerProcessUserTimeLimit", ctypes.c_int64), ("PerJobUserTimeLimit", ctypes.c_int64), ("LimitFlags", wintypes.DWORD), ("MinimumWorkingSetSize", ctypes.c_size_t), ("MaximumWorkingSetSize", ctypes.c_size_t), ("ActiveProcessLimit", wintypes.DWORD), ("Affinity", ctypes.c_void_p), ("PriorityClass", wintypes.DWORD), ("SchedulingClass", wintypes.DWORD)]
