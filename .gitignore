@@ -25,6 +25,9 @@ apps/data/
 *.tsbuildinfo
 
 .worktrees/
+.build/
+build/
+dist/
 
 # dwyt start
 *mcp.json
