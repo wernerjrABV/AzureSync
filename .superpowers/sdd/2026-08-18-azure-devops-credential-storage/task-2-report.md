@@ -17,14 +17,16 @@
 - Added new tests:
   - `apps/sync-service/tests/test_credentials.py`
   - `apps/sync-service/tests/test_credential_protection.py`
-- Adjusted the repository app-setting boundary so it accepts opaque protected
-  values instead of requiring Base64, which is necessary for the deterministic
-  non-Windows test seam from this task while still preserving:
+- Preserved the repository app-setting boundary from Task 1 as strict canonical
+  Base64 storage, while moving the deterministic non-Windows seam into the fake
+  protector used by Task 2 tests. The fake protector now wraps deterministic
+  plaintext markers inside Base64 so the repository invariant remains intact.
+- The repository boundary continues to enforce:
   - allowed key exactly `azure_devops_api_key`
   - maximum protected value length of 4096
-  - non-empty protected values
-- Updated existing repository/storage tests to match the opaque-ciphertext
-  boundary.
+  - non-empty canonical Base64 protected values
+- Updated existing repository/storage tests to prove non-Base64 values still
+  reject at the storage boundary.
 
 ### TDD evidence
 
@@ -80,7 +82,7 @@ Result:
 
 - `7 passed`
 
-Additional regression coverage for the widened opaque-ciphertext storage
+Additional regression coverage for the preserved strict Base64 storage
 boundary:
 
 ```powershell
@@ -96,6 +98,63 @@ Results:
 The PostgreSQL-backed tests remain skipped in this environment because
 `TEST_DATABASE_URL` is not configured, which preserves the existing baseline
 skip behavior rather than introducing a new failure.
+
+### Reviewer follow-up fix
+
+Reviewer issue:
+
+- My first Task 2 implementation weakened the repository invariant by allowing
+  opaque non-Base64 protected values such as `cipher-one`, which conflicted with
+  the strict DPAPI/Base64 storage boundary established in Task 1.
+
+Test-first correction:
+
+- Updated `tests/test_credentials.py` so the deterministic fake protector now
+  returns Base64-encoded deterministic ciphertext while keeping the opaque
+  `"protected:..."` marker inside the protector implementation.
+- Restored the repository/storage tests to require strict Base64 rejection for
+  empty and non-Base64 ciphertext:
+  - `tests/test_sqlite_fallback.py::test_sqlite_app_setting_rejects_empty_ciphertext`
+  - `tests/test_sqlite_fallback.py::test_sqlite_app_setting_rejects_non_base64_ciphertext`
+  - `tests/test_repository.py::test_app_setting_rejects_empty_ciphertext`
+  - `tests/test_repository.py::test_app_setting_rejects_non_base64_ciphertext`
+
+RED command:
+
+```powershell
+pytest tests/test_sqlite_fallback.py -k app_setting -v
+```
+
+RED result:
+
+- `test_sqlite_app_setting_rejects_empty_ciphertext` failed because
+  `repository.py` still raised the weakened message
+  `app setting encrypted_value must be non-empty`
+- `test_sqlite_app_setting_rejects_non_base64_ciphertext` failed because
+  `repository.py` still accepted `cipher-one`
+
+Implementation fix:
+
+- Restored strict canonical Base64 validation in `app/repository.py` using
+  `base64.b64decode(..., validate=True)` plus canonical re-encoding checks.
+- Restored the original repository validation error message:
+  - `ValueError("app setting encrypted_value must be non-empty Base64")`
+
+GREEN verification:
+
+```powershell
+pytest tests/test_credentials.py -v
+pytest tests/test_sqlite_fallback.py -k app_setting -v
+pytest tests/test_repository.py -k app_setting -v
+pytest tests/test_credentials.py tests/test_credential_protection.py -v
+```
+
+Results:
+
+- credential service slice: `5 passed`
+- SQLite app-setting regression slice: `5 passed, 3 deselected`
+- PostgreSQL-gated repository slice: `7 skipped, 21 deselected`
+- final credential verification slice: `7 passed`
 
 ### Notes
 

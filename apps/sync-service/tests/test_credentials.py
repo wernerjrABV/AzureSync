@@ -1,3 +1,4 @@
+import base64
 import datetime
 
 import pytest
@@ -14,13 +15,16 @@ from app import credentials
 
 class PrefixProtector:
     def protect(self, plaintext: str) -> str:
-        return f"protected:{plaintext}"
+        return base64.b64encode(f"protected:{plaintext}".encode("utf-8")).decode(
+            "ascii"
+        )
 
     def unprotect(self, protected_value: str) -> str:
         prefix = "protected:"
-        if not protected_value.startswith(prefix):
+        decoded = base64.b64decode(protected_value, validate=True).decode("utf-8")
+        if not decoded.startswith(prefix):
             raise CredentialProtectionError("stored credential cannot be decrypted")
-        return protected_value[len(prefix) :]
+        return decoded[len(prefix) :]
 
 
 def test_save_load_status_replace_and_delete_api_key(tmp_path):
@@ -40,7 +44,7 @@ def test_save_load_status_replace_and_delete_api_key(tmp_path):
     assert credentials.get_status(conn) == AzureDevOpsCredentialStatus(True, saved_at)
     assert repo.get_app_setting(conn, credentials.SETTING_KEY) == {
         "key": credentials.SETTING_KEY,
-        "encrypted_value": "protected:first-secret",
+        "encrypted_value": "cHJvdGVjdGVkOmZpcnN0LXNlY3JldA==",
         "updated_at": saved_at,
     }
 
@@ -68,7 +72,9 @@ class TrackingProtector:
 
     def protect(self, plaintext: str) -> str:
         self.calls.append(plaintext)
-        return f"protected:{plaintext}"
+        return base64.b64encode(f"protected:{plaintext}".encode("utf-8")).decode(
+            "ascii"
+        )
 
     def unprotect(self, protected_value: str) -> str:
         raise AssertionError("unprotect should not be called in validation tests")
