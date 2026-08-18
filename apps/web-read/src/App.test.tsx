@@ -54,12 +54,9 @@ describe("App navigation", () => {
     );
   });
 
-  test("uses the Astryx flow icon for capacity", () => {
+  test("hides capacity from the main sidebar", () => {
     render(<App />);
 
-    expect(screen.getByRole("button", { name: "Capacity & Flow" })).toHaveAttribute(
-      "data-icon",
-      "arrowsUpDown",
-    );
+    expect(screen.queryByRole("button", { name: "Capacity & Flow" })).not.toBeInTheDocument();
   });
 });
