@@ -28,7 +28,7 @@ def is_port_available(host: str, port: int) -> bool:
 
 
 class StopEvent(Protocol):
-    def is_set(self) -> bool: ...
+    def wait(self, timeout_ms: int) -> bool: ...
 
 
 @dataclass(frozen=True)
@@ -141,7 +141,7 @@ class ServiceSupervisor:
 
     def monitor_until_stop(self) -> None:
         while True:
-            if self.stop_event.is_set():
+            if self.stop_event.wait(0):
                 self.stop()
                 return
             for service in self.services:
