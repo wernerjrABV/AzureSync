@@ -1,9 +1,15 @@
 __pycache__/
 *.py[cod]
+.python-version
 
 .pytest_cache/
 .coverage
+.coverage.*
 htmlcov/
+.tox/
+.nox/
+.ruff_cache/
+.mypy_cache/
 
 .venv/
 venv/
@@ -17,12 +23,34 @@ env/
 
 apps/data/
 
+# Local runtime/build output
+/.build/
+/build/
+/dist/
+/logs/
+/api-read/
+/sync-service/
+/web-read/
+*.pid
+*.sqlite
+*.sqlite3
+*.db
+*.db-journal
+
 .vscode/
 .idea/
 
 *.log
 
 *.tsbuildinfo
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Local SDD/agent artifacts (source plans live under docs/)
+/.superpowers/sdd/
 
 .worktrees/
 
