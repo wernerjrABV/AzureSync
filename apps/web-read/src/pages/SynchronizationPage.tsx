@@ -19,6 +19,7 @@ import { Selector } from "@astryxdesign/core/Selector";
 import { Spinner } from "@astryxdesign/core/Spinner";
 import { Text } from "@astryxdesign/core/Text";
 import { TextInput } from "@astryxdesign/core/TextInput";
+import AzureDevOpsCredentialCard from "../components/AzureDevOpsCredentialCard";
 import {
   createSyncAreaPath,
   deleteSyncAreaPath,
@@ -106,7 +107,10 @@ function StatusMessage({ areaPath }: { areaPath: SyncAreaPath }) {
       <Banner
         status="error"
         title="Synchronization requires Azure DevOps authentication"
-        description={areaPath.last_error_msg ?? "Configure AZURE_DEVOPS_API_KEY and try again."}
+        description={
+          areaPath.last_error_msg
+            ?? "Update the Azure DevOps credential on this page and try again."
+        }
       />
     );
   }
@@ -360,6 +364,8 @@ export default function SynchronizationPage() {
       </HStack>
 
       {error && <Banner status="error" title="Synchronization management error" description={error} />}
+
+      <AzureDevOpsCredentialCard />
 
       {isLoading && <Spinner label="Loading synchronization settings" />}
 
