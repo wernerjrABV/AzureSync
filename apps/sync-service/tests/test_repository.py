@@ -1,4 +1,5 @@
 from app import repository as repo
+import pytest
 
 
 def test_create_and_get_area_path(db_conn):
@@ -440,3 +441,119 @@ def test_capacity_snapshot_roundtrip_replaces_existing_payload(db_conn):
     assert repo.get_capacity_snapshot(db_conn, area_path_id=area_path_id) == {
         "forecast": {"expected": 6}
     }
+
+
+def test_app_setting_roundtrip_replaces_existing_value(db_conn):
+    first = datetime.datetime(2026, 8, 18, 10, 0, 0)
+    second = datetime.datetime(2026, 8, 18, 11, 0, 0)
+
+    repo.upsert_app_setting(
+        db_conn,
+        key="azure_devops_api_key",
+        encrypted_value="Y2lwaGVyLW9uZQ==",
+        updated_at=first,
+    )
+    repo.upsert_app_setting(
+        db_conn,
+        key="azure_devops_api_key",
+        encrypted_value="Y2lwaGVyLXR3bw==",
+        updated_at=second,
+    )
+    db_conn.commit()
+
+    assert repo.get_app_setting(db_conn, "azure_devops_api_key") == {
+        "key": "azure_devops_api_key",
+        "encrypted_value": "Y2lwaGVyLXR3bw==",
+        "updated_at": second,
+    }
+
+    repo.delete_app_setting(db_conn, "azure_devops_api_key")
+    db_conn.commit()
+
+    assert repo.get_app_setting(db_conn, "azure_devops_api_key") is None
+
+
+def test_app_setting_rejects_unknown_key(db_conn):
+    with pytest.raises(
+        ValueError, match="app setting key must be 'azure_devops_api_key'"
+    ):
+        repo.upsert_app_setting(
+            db_conn,
+            key="unexpected_key",
+            encrypted_value="Y2lwaGVyLW9uZQ==",
+            updated_at=datetime.datetime(2026, 8, 18, 10, 0, 0),
+        )
+
+
+def test_app_setting_accepts_values_up_to_16384_chars(db_conn):
+    updated_at = datetime.datetime(2026, 8, 18, 10, 0, 0)
+
+    repo.upsert_app_setting(
+        db_conn,
+        key="azure_devops_api_key",
+        encrypted_value="A" * 16384,
+        updated_at=updated_at,
+    )
+    db_conn.commit()
+
+    assert repo.get_app_setting(db_conn, "azure_devops_api_key") == {
+        "key": "azure_devops_api_key",
+        "encrypted_value": "A" * 16384,
+        "updated_at": updated_at,
+    }
+
+
+def test_app_setting_rejects_values_longer_than_16384(db_conn):
+    with pytest.raises(
+        ValueError, match="app setting encrypted_value must be at most 16384 characters"
+    ):
+        repo.upsert_app_setting(
+            db_conn,
+            key="azure_devops_api_key",
+            encrypted_value="A" * 16388,
+            updated_at=datetime.datetime(2026, 8, 18, 10, 0, 0),
+        )
+
+
+def test_app_setting_cleanup_seed(db_conn):
+    repo.upsert_app_setting(
+        db_conn,
+        key="azure_devops_api_key",
+        encrypted_value="Y2lwaGVyLW9uZQ==",
+        updated_at=datetime.datetime(2026, 8, 18, 10, 0, 0),
+    )
+    db_conn.commit()
+
+    assert repo.get_app_setting(db_conn, "azure_devops_api_key") == {
+        "key": "azure_devops_api_key",
+        "encrypted_value": "Y2lwaGVyLW9uZQ==",
+        "updated_at": datetime.datetime(2026, 8, 18, 10, 0, 0),
+    }
+
+
+def test_app_setting_cleanup_isolates_between_tests(db_conn):
+    assert repo.get_app_setting(db_conn, "azure_devops_api_key") is None
+
+
+def test_app_setting_rejects_empty_ciphertext(db_conn):
+    with pytest.raises(
+        ValueError, match="app setting encrypted_value must be non-empty Base64"
+    ):
+        repo.upsert_app_setting(
+            db_conn,
+            key="azure_devops_api_key",
+            encrypted_value="",
+            updated_at=datetime.datetime(2026, 8, 18, 10, 0, 0),
+        )
+
+
+def test_app_setting_rejects_non_base64_ciphertext(db_conn):
+    with pytest.raises(
+        ValueError, match="app setting encrypted_value must be non-empty Base64"
+    ):
+        repo.upsert_app_setting(
+            db_conn,
+            key="azure_devops_api_key",
+            encrypted_value="cipher-one",
+            updated_at=datetime.datetime(2026, 8, 18, 10, 0, 0),
+        )

@@ -1,10 +1,18 @@
 import datetime
 import json
+import base64
+import binascii
 
 import psycopg
 from psycopg.rows import dict_row
 
 from app.capacity import StatusInterval
+
+APP_SETTING_CREDENTIAL_KEY = "azure_devops_api_key"
+# Plaintext PATs are capped separately at 4096 characters in credentials.py.
+# Stored ciphertext is Base64-encoded DPAPI output, so it needs headroom for
+# encryption metadata plus Base64 expansion while still remaining bounded.
+APP_SETTING_ENCRYPTED_VALUE_MAX_LENGTH = 16384
 
 
 def create_area_path(
@@ -369,3 +377,63 @@ def get_history_loaded_at(conn: psycopg.Connection, area_path_id: int):
         )
         row = cur.fetchone()
         return row[0] if row else None
+
+
+def get_app_setting(conn: psycopg.Connection, key: str) -> dict | None:
+    with conn.cursor(row_factory=dict_row) as cur:
+        cur.execute(
+            "SELECT key, encrypted_value, updated_at FROM app_settings WHERE key = %s",
+            (key,),
+        )
+        return cur.fetchone()
+
+
+def upsert_app_setting(
+    conn: psycopg.Connection,
+    *,
+    key: str,
+    encrypted_value: str,
+    updated_at: datetime.datetime,
+) -> None:
+    _validate_app_setting(key=key, encrypted_value=encrypted_value)
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO app_settings (key, encrypted_value, updated_at)
+            VALUES (%s, %s, %s)
+            ON CONFLICT (key) DO UPDATE SET
+                encrypted_value = EXCLUDED.encrypted_value,
+                updated_at = EXCLUDED.updated_at
+            """,
+            (key, encrypted_value, updated_at),
+        )
+
+
+def delete_app_setting(conn: psycopg.Connection, key: str) -> None:
+    with conn.cursor() as cur:
+        cur.execute("DELETE FROM app_settings WHERE key = %s", (key,))
+
+
+def _validate_app_setting(*, key: str, encrypted_value: str) -> None:
+    if key != APP_SETTING_CREDENTIAL_KEY:
+        raise ValueError(
+            "app setting key must be 'azure_devops_api_key'"
+        )
+    if len(encrypted_value) > APP_SETTING_ENCRYPTED_VALUE_MAX_LENGTH:
+        raise ValueError(
+            "app setting encrypted_value must be at most 16384 characters"
+        )
+    if not _is_strict_base64(encrypted_value):
+        raise ValueError(
+            "app setting encrypted_value must be non-empty Base64"
+        )
+
+
+def _is_strict_base64(value: str) -> bool:
+    if not value:
+        return False
+    try:
+        decoded = base64.b64decode(value, validate=True)
+    except (binascii.Error, ValueError):
+        return False
+    return bool(decoded) and base64.b64encode(decoded).decode("ascii") == value

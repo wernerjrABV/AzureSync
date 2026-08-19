@@ -2,17 +2,20 @@
 
 import "@testing-library/jest-dom/vitest";
 import { StrictMode } from "react";
-import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { Theme } from "@astryxdesign/core/theme";
 import { neutralTheme } from "@astryxdesign/theme-neutral";
-import { afterAll, afterEach, beforeAll, describe, expect, test, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
 import SynchronizationPage from "./SynchronizationPage";
 import * as syncServiceClient from "../services/syncServiceClient";
 import type { SyncAreaPath } from "../services/syncServiceClient";
 
 vi.mock("../services/syncServiceClient", () => ({
   fetchSyncAreaPaths: vi.fn(),
+  fetchAzureDevOpsCredentialStatus: vi.fn(),
   createSyncAreaPath: vi.fn(),
+  saveAzureDevOpsCredential: vi.fn(),
+  deleteAzureDevOpsCredential: vi.fn(),
   updateSyncAreaPath: vi.fn(),
   deleteSyncAreaPath: vi.fn(),
   startAreaPathSync: vi.fn(),
@@ -53,6 +56,10 @@ function renderPage({ strictMode = false }: { strictMode?: boolean } = {}) {
 
 function mockInitialLoad(paths: SyncAreaPath[] = [areaPath]) {
   vi.mocked(syncServiceClient.fetchSyncAreaPaths).mockResolvedValue(paths);
+  vi.mocked(syncServiceClient.fetchAzureDevOpsCredentialStatus).mockResolvedValue({
+    configured: false,
+    updated_at: null,
+  });
 }
 
 function deferred<T>() {
@@ -88,6 +95,13 @@ beforeAll(() => {
   window.scrollTo = vi.fn();
 });
 
+beforeEach(() => {
+  vi.mocked(syncServiceClient.fetchAzureDevOpsCredentialStatus).mockResolvedValue({
+    configured: false,
+    updated_at: null,
+  });
+});
+
 afterAll(() => {
   delete (HTMLDialogElement.prototype as Partial<HTMLDialogElement>).showModal;
   delete (HTMLDialogElement.prototype as Partial<HTMLDialogElement>).close;
@@ -98,7 +112,10 @@ afterEach(() => {
   vi.useRealTimers();
   vi.clearAllMocks();
   vi.mocked(syncServiceClient.fetchSyncAreaPaths).mockReset();
+  vi.mocked(syncServiceClient.fetchAzureDevOpsCredentialStatus).mockReset();
   vi.mocked(syncServiceClient.createSyncAreaPath).mockReset();
+  vi.mocked(syncServiceClient.saveAzureDevOpsCredential).mockReset();
+  vi.mocked(syncServiceClient.deleteAzureDevOpsCredential).mockReset();
   vi.mocked(syncServiceClient.updateSyncAreaPath).mockReset();
   vi.mocked(syncServiceClient.deleteSyncAreaPath).mockReset();
   vi.mocked(syncServiceClient.startAreaPathSync).mockReset();
@@ -115,16 +132,14 @@ describe("SynchronizationPage", () => {
 
     renderPage({ strictMode: true });
 
-    expect(screen.getByLabelText("Loading synchronization settings")).toBeInTheDocument();
+    expect(screen.queryByText("Intake\\Platform")).not.toBeInTheDocument();
 
     staleRequest.resolve([areaPath]);
     await act(async () => {});
 
-    expect(screen.getByLabelText("Loading synchronization settings")).toBeInTheDocument();
-
     currentRequest.resolve([areaPath]);
     expect(await screen.findByText("Intake\\Platform")).toBeInTheDocument();
-    expect(screen.queryByLabelText("Loading synchronization settings")).not.toBeInTheDocument();
+    expect(screen.queryByText("Loading synchronization settings")).not.toBeInTheDocument();
   });
 
   test("loads after StrictMode remounts the page effects", async () => {
@@ -142,7 +157,19 @@ describe("SynchronizationPage", () => {
 
     expect(await screen.findByText("Intake\\Platform")).toBeInTheDocument();
     expect(screen.getByText("Running")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Synchronize" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Synchronize Intake\\Platform" })).toHaveAttribute("aria-disabled", "true");
+  });
+
+  test("renders the Azure DevOps credential card above the synchronization cards", async () => {
+    mockInitialLoad();
+
+    renderPage();
+
+    expect(await screen.findByRole("heading", { name: "Azure DevOps credential" })).toBeInTheDocument();
+    const headings = screen.getAllByRole("heading").map((heading) => heading.textContent);
+    expect(headings).toContain("Synchronization");
+    expect(headings).toContain("Azure DevOps credential");
+    expect(headings).toContain("Intake\\Platform");
   });
 
   test("renders compact icon actions in a three-column card grid", async () => {
@@ -206,6 +233,20 @@ describe("SynchronizationPage", () => {
     expect(screen.getByText("Include subpaths: No")).toBeInTheDocument();
     expect(screen.getByText("Last synchronized: Never")).toBeInTheDocument();
     expect(screen.getByText("Last sync count: 0")).toBeInTheDocument();
+  });
+
+  test("replaces the auth error guidance with the synchronization-page credential prompt", async () => {
+    mockInitialLoad([{
+      ...areaPath,
+      last_sync_status: "auth_error",
+      last_error_msg: null,
+    }]);
+
+    renderPage();
+
+    expect(await screen.findByText("Synchronization requires Azure DevOps authentication")).toBeInTheDocument();
+    expect(screen.getByText("Update the Azure DevOps credential on this page and try again.")).toBeInTheDocument();
+    expect(screen.queryByText(/AZURE_DEVOPS_API_KEY/)).not.toBeInTheDocument();
   });
 
   test("formats synchronization intervals as hours and minutes", async () => {
@@ -295,7 +336,7 @@ describe("SynchronizationPage", () => {
     await act(async () => {});
     expect(screen.getByText("Intake\\Platform")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Synchronize" }));
+    fireEvent.click(screen.getByRole("button", { name: "Synchronize Intake\\Platform" }));
     await act(async () => {});
     expect(syncServiceClient.startAreaPathSync).toHaveBeenCalledWith(7);
 
@@ -340,7 +381,7 @@ describe("SynchronizationPage", () => {
     await screen.findByText("Intake\\Platform");
     vi.useFakeTimers();
 
-    fireEvent.click(screen.getByRole("button", { name: "Synchronize" }));
+    fireEvent.click(screen.getByRole("button", { name: "Synchronize Intake\\Platform" }));
     await act(async () => {});
 
     await act(async () => {
@@ -367,9 +408,9 @@ describe("SynchronizationPage", () => {
     await screen.findByText("Intake\\Mobile");
     vi.useFakeTimers();
 
-    fireEvent.click(screen.getAllByRole("button", { name: "Synchronize" })[0]);
+    fireEvent.click(screen.getByRole("button", { name: "Synchronize Intake\\Platform" }));
     await act(async () => {});
-    fireEvent.click(screen.getAllByRole("button", { name: "Synchronize" })[1]);
+    fireEvent.click(screen.getByRole("button", { name: "Synchronize Intake\\Mobile" }));
     await act(async () => {});
 
     staleRefresh.resolve([{ ...areaPath, is_running: false }, { ...secondAreaPath, is_running: false }]);
@@ -387,17 +428,16 @@ describe("SynchronizationPage", () => {
       .mockResolvedValueOnce([{ ...areaPath, is_running: true, last_sync_status: null }])
       .mockResolvedValue([]);
     vi.mocked(syncServiceClient.startAreaPathSync).mockResolvedValue(undefined);
-    vi.mocked(syncServiceClient.deleteSyncAreaPath).mockResolvedValue(undefined);
 
     renderPage();
     await screen.findByText("Intake\\Platform");
     vi.useFakeTimers();
-    fireEvent.click(screen.getByRole("button", { name: "Synchronize" }));
+    fireEvent.click(screen.getByRole("button", { name: "Synchronize Intake\\Platform" }));
     await act(async () => {});
 
-    fireEvent.click(screen.getByRole("button", { name: "Delete Intake\\Platform" }));
-    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
-    await act(async () => {});
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5_000);
+    });
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(5_000);
@@ -414,7 +454,7 @@ describe("SynchronizationPage", () => {
     const { unmount } = renderPage();
     await screen.findByText("Intake\\Platform");
     vi.useFakeTimers();
-    fireEvent.click(screen.getByRole("button", { name: "Synchronize" }));
+    fireEvent.click(screen.getByRole("button", { name: "Synchronize Intake\\Platform" }));
     await act(async () => {});
 
     unmount();

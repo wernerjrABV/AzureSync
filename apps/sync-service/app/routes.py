@@ -4,8 +4,9 @@ from concurrent.futures import ThreadPoolExecutor
 
 from flask import Flask, g, redirect, render_template, request
 
-from app import db, repository as repo, sync_service
+from app import credentials, db, repository as repo, sync_service
 from app.ado_client import AdoClient
+from app.credential_protection import CredentialProtectionError, DpapiCredentialProtector
 
 
 _AREA_PATH_RESPONSE_FIELDS = (
@@ -30,27 +31,36 @@ _MANUAL_SYNC_IDS: set[int] = set()
 _MANUAL_SYNC_LOCK = threading.Lock()
 
 
-def start_manual_sync(conn_factory, area_path_id: int) -> bool:
+def start_manual_sync(conn_factory, area_path_id: int, credential_protector) -> bool:
     with _MANUAL_SYNC_LOCK:
         if area_path_id in _MANUAL_SYNC_IDS:
             return False
         _MANUAL_SYNC_IDS.add(area_path_id)
         try:
-            _MANUAL_SYNC_EXECUTOR.submit(_run_manual_sync_worker, conn_factory, area_path_id)
+            _MANUAL_SYNC_EXECUTOR.submit(
+                _run_manual_sync_worker,
+                conn_factory,
+                area_path_id,
+                credential_protector,
+            )
         except Exception:
             _MANUAL_SYNC_IDS.discard(area_path_id)
             raise
     return True
 
 
-def _run_manual_sync_worker(conn_factory, area_path_id: int) -> None:
+def _run_manual_sync_worker(conn_factory, area_path_id: int, credential_protector) -> None:
     conn = None
     try:
         conn = conn_factory()
         row = repo.get_area_path(conn, area_path_id)
         if row is None or row["is_running"]:
             return
-        client = AdoClient(row["organization"], row["project"])
+        client = AdoClient(
+            row["organization"],
+            row["project"],
+            pat_provider=lambda: credentials.load_api_key(conn, credential_protector),
+        )
         sync_service.run_sync(conn, row, client)
     finally:
         with _MANUAL_SYNC_LOCK:
@@ -69,6 +79,13 @@ def _serialize_area_path(row: dict) -> dict:
             value = bool(value)
         serialized[field] = value
     return serialized
+
+
+def _serialize_credential_status(status):
+    return {
+        "configured": status.configured,
+        "updated_at": status.updated_at.isoformat() if status.updated_at else None,
+    }
 
 
 def _parse_area_path_payload():
@@ -96,8 +113,9 @@ def _parse_area_path_payload():
     return fields
 
 
-def create_app(conn_factory=db.get_connection) -> Flask:
+def create_app(conn_factory=db.get_connection, credential_protector=None) -> Flask:
     app = Flask(__name__)
+    credential_protector = credential_protector or DpapiCredentialProtector()
 
     def open_connection():
         conn = conn_factory()
@@ -164,12 +182,41 @@ def create_app(conn_factory=db.get_connection) -> Flask:
         if row["is_running"]:
             return {"error": "sync already running"}, 409
         try:
-            started = start_manual_sync(conn_factory, area_path_id)
+            started = start_manual_sync(conn_factory, area_path_id, credential_protector)
         except Exception:
             return {"error": "sync could not be queued"}, 503
         if not started:
             return {"error": "sync already running"}, 409
         return {"status": "started"}, 202
+
+    @app.route("/api/settings/azure-devops", methods=["GET"])
+    def get_azure_devops_credential_api():
+        conn = open_connection()
+        return _serialize_credential_status(credentials.get_status(conn))
+
+    @app.route("/api/settings/azure-devops", methods=["PUT"])
+    def put_azure_devops_credential_api():
+        payload = request.get_json(silent=True)
+        api_key = payload.get("api_key") if isinstance(payload, dict) else None
+
+        conn = open_connection()
+        try:
+            status = credentials.save_api_key(conn, credential_protector, api_key)
+            conn.commit()
+        except credentials.CredentialValidationError:
+            conn.rollback()
+            return {"error": "invalid Azure DevOps credential"}, 400
+        except CredentialProtectionError:
+            conn.rollback()
+            return {"error": "credential could not be stored"}, 500
+        return _serialize_credential_status(status)
+
+    @app.route("/api/settings/azure-devops", methods=["DELETE"])
+    def delete_azure_devops_credential_api():
+        conn = open_connection()
+        credentials.delete_api_key(conn)
+        conn.commit()
+        return "", 204
 
     @app.route("/area-paths", methods=["POST"])
     def create_area_path():
@@ -226,7 +273,11 @@ def create_app(conn_factory=db.get_connection) -> Flask:
         if row["is_running"]:
             return {"error": "sync already running"}, 409
 
-        client = AdoClient(row["organization"], row["project"])
+        client = AdoClient(
+            row["organization"],
+            row["project"],
+            pat_provider=lambda: credentials.load_api_key(conn, credential_protector),
+        )
         result = sync_service.run_sync(conn, row, client)
         return redirect("/")
 

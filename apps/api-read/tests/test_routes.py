@@ -221,6 +221,27 @@ def test_create_area_path_forwards_json_to_sync_service():
             502,
             {"error": "upstream sync failed"},
         ),
+        (
+            "GET",
+            "/api/settings/azure-devops",
+            None,
+            200,
+            {"configured": True, "updated_at": "2026-08-18T12:00:00"},
+        ),
+        (
+            "PUT",
+            "/api/settings/azure-devops",
+            {"api_key": "browser-secret"},
+            200,
+            {"configured": True, "updated_at": "2026-08-18T12:00:00"},
+        ),
+        (
+            "DELETE",
+            "/api/settings/azure-devops",
+            None,
+            204,
+            None,
+        ),
     ],
 )
 def test_area_path_mutations_forward_upstream_status_and_json_verbatim(
@@ -247,6 +268,8 @@ def test_area_path_mutations_forward_upstream_status_and_json_verbatim(
     assert response.status_code == upstream_status
     assert response.get_json() == upstream_body
     assert sync_service_client.calls == [(method, path, payload)]
+    if method == "PUT":
+        assert "browser-secret" not in response.get_data(as_text=True)
 
 
 def test_area_path_write_returns_503_when_sync_service_is_unavailable():
@@ -265,6 +288,24 @@ def test_area_path_write_returns_503_when_sync_service_is_unavailable():
             "/api/area-paths",
             json={"organization": "org", "project": "proj", "area_path": "proj\\A"},
         )
+
+    assert response.status_code == 503
+    assert response.get_json() == {"error": "sync service unavailable"}
+
+
+def test_azure_devops_settings_read_returns_503_when_sync_service_is_unavailable():
+    class UnavailableSyncServiceClient:
+        def request(self, *_args, **_kwargs):
+            raise SyncServiceUnavailable()
+
+    app = create_app(
+        conn_factory=lambda: None,
+        sync_service_client=UnavailableSyncServiceClient(),
+    )
+    app.config["TESTING"] = True
+
+    with app.test_client() as test_client:
+        response = test_client.get("/api/settings/azure-devops")
 
     assert response.status_code == 503
     assert response.get_json() == {"error": "sync service unavailable"}

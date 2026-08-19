@@ -24,6 +24,11 @@ export interface AreaPathInput {
   intervalo_minutos: number;
 }
 
+export interface AzureDevOpsCredentialStatus {
+  configured: boolean;
+  updated_at: string | null;
+}
+
 const BASE_URL =
   import.meta.env.VITE_API_READ_BASE_URL ?? "http://127.0.0.1:5001";
 
@@ -98,4 +103,22 @@ export async function startAreaPathSync(id: number): Promise<void> {
     `/api/area-paths/${encodeURIComponent(String(id))}/sync`,
     { method: "POST" }
   );
+}
+
+export function fetchAzureDevOpsCredentialStatus(): Promise<AzureDevOpsCredentialStatus> {
+  return request<AzureDevOpsCredentialStatus>("/api/settings/azure-devops");
+}
+
+export function saveAzureDevOpsCredential(
+  apiKey: string
+): Promise<AzureDevOpsCredentialStatus> {
+  return request<AzureDevOpsCredentialStatus>("/api/settings/azure-devops", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ api_key: apiKey }),
+  });
+}
+
+export async function deleteAzureDevOpsCredential(): Promise<void> {
+  await request<void>("/api/settings/azure-devops", { method: "DELETE" });
 }
