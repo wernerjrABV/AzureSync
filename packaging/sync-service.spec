@@ -1,7 +1,7 @@
 from pathlib import Path
 
 
-ROOT = Path(SPECPATH).parent.parent
+ROOT = Path(SPECPATH).resolve().parent
 
 a = Analysis(
     [str(ROOT / "apps" / "sync-service" / "portable_run.py")],

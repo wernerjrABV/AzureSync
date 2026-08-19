@@ -6,6 +6,9 @@ param(
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
+# Native tools such as pip may write informational messages to stderr even
+# when they exit successfully.  Invoke-Checked validates the actual exit code.
+$PSNativeCommandUseErrorActionPreference = $false
 
 function Assert-SigningParameters {
     if ([string]::IsNullOrWhiteSpace($SignToolPath) -xor [string]::IsNullOrWhiteSpace($CertificateThumbprint)) {
@@ -88,9 +91,18 @@ function Invoke-Checked {
         [scriptblock]$Command
     )
 
-    & $Command
-    if ($LASTEXITCODE -ne 0) {
-        throw "Command failed with exit code $LASTEXITCODE."
+    $previousErrorAction = $ErrorActionPreference
+    try {
+        # Native tools commonly use stderr for progress and warnings.  Their
+        # exit code is the authoritative success/failure signal here.
+        $ErrorActionPreference = 'Continue'
+        & $Command
+        $exitCode = $LASTEXITCODE
+    } finally {
+        $ErrorActionPreference = $previousErrorAction
+    }
+    if ($exitCode -ne 0) {
+        throw "Command failed with exit code $exitCode."
     }
 }
 
@@ -149,12 +161,14 @@ if (-not [string]::IsNullOrWhiteSpace($SignToolPath)) {
 
 $portableVenv = Join-Path $root '.build\portable-venv'
 $buildRoot = Join-Path $root '.build'
+$pytestTempRoot = Join-Path $buildRoot 'pytest-temp'
 $bundle = Join-Path $root 'dist\AzureSync-win-x64'
 $zipPath = Join-Path $root 'dist\AzureSync-win-x64.zip'
 $hashPath = Join-Path $root 'dist\AzureSync-win-x64.zip.sha256'
 
 New-Item -ItemType Directory -Path $buildRoot -Force | Out-Null
 New-Item -ItemType Directory -Path (Join-Path $root 'dist') -Force | Out-Null
+Reset-Directory -Path $pytestTempRoot
 
 if (Test-Path -LiteralPath $portableVenv) {
     Remove-Item -LiteralPath $portableVenv -Recurse -Force
@@ -172,21 +186,36 @@ Invoke-Checked {
 
 Push-Location (Join-Path $root 'apps\sync-service')
 try {
-    Invoke-Checked { & $buildPython -m pytest tests -v }
+    Invoke-Checked { & $buildPython -m pytest tests -v -p no:cacheprovider --basetemp (Join-Path $pytestTempRoot 'sync-service') }
 } finally {
     Pop-Location
 }
 
 Push-Location (Join-Path $root 'apps\api-read')
 try {
-    Invoke-Checked { & $buildPython -m pytest tests -v }
+    Invoke-Checked { & $buildPython -m pytest tests -v -p no:cacheprovider --basetemp (Join-Path $pytestTempRoot 'api-read') }
 } finally {
     Pop-Location
 }
 
 Push-Location (Join-Path $root 'apps\web-read')
 try {
-    Invoke-Checked { & npm ci }
+    $webRoot = (Get-Location).Path
+    $nodeModules = Join-Path $webRoot 'node_modules'
+    $requiredNodeBins = @(
+        (Join-Path $nodeModules '.bin\vitest.cmd'),
+        (Join-Path $nodeModules '.bin\tsc.cmd'),
+        (Join-Path $nodeModules '.bin\vite.cmd')
+    )
+    $missingNodeBins = @($requiredNodeBins | Where-Object { -not (Test-Path -LiteralPath $_) })
+    if ((Test-Path -LiteralPath $nodeModules) -and $missingNodeBins.Count -eq 0) {
+        Write-Host 'Reusing existing apps/web-read/node_modules.'
+    } elseif (Test-Path -LiteralPath $nodeModules) {
+        Write-Host 'Existing apps/web-read/node_modules is incomplete; repairing with npm install.'
+        Invoke-Checked { & npm install --prefer-offline --no-audit --no-fund }
+    } else {
+        Invoke-Checked { & npm ci }
+    }
     Invoke-Checked { & npm test }
     Invoke-Checked { & npm run build }
 } finally {
