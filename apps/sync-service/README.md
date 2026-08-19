@@ -20,9 +20,12 @@ this database from another app.
 ## Setup
 
 1. Set Windows environment variables:
-   - Set `DATABASE_URL` and `AZURE_DEVOPS_API_KEY` in the Windows environment.
+   - Set `DATABASE_URL` in the Windows environment.
    - `SQLITE_DATABASE_PATH` is optional and defaults to `apps/data/azure_sync.sqlite3`.
    - If PostgreSQL is not configured or cannot be reached, the service uses SQLite.
+   - Azure DevOps credentials are configured after startup through the synchronization
+     settings flow (or the `/api/settings/azure-devops` API), not through an
+     environment variable.
 2. Install dependencies:
    ```powershell
    python -m pip install --user uv
@@ -61,4 +64,6 @@ only at its final completion.
 - Add an area path via the form on the home page (organization, project, area path, include sub-paths, active, interval in minutes).
 - First sync for a new area path is a full load; subsequent syncs are incremental and remove items no longer in scope.
 - Click "Sincronizar agora" to trigger a sync manually — disabled while a sync is already running for that area path.
-- A red banner appears at the top if any area path's last sync failed due to an invalid/expired token — check `AZURE_DEVOPS_API_KEY`.
+- A red banner appears at the top if any area path's last sync failed due to an
+  invalid/expired token — update the stored credential through the synchronization
+  settings flow (or the `/api/settings/azure-devops` API).
