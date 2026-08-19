@@ -95,6 +95,20 @@ def create_app(conn_factory=db.get_connection, sync_service_client=None) -> Flas
             "POST", f"/api/area-paths/{area_path_id}/sync"
         )
 
+    @app.route("/api/settings/azure-devops", methods=["GET"])
+    def get_azure_devops_credential():
+        return forward_to_sync_service("GET", "/api/settings/azure-devops")
+
+    @app.route("/api/settings/azure-devops", methods=["PUT"])
+    def put_azure_devops_credential():
+        return forward_to_sync_service(
+            "PUT", "/api/settings/azure-devops", request.get_json(silent=True)
+        )
+
+    @app.route("/api/settings/azure-devops", methods=["DELETE"])
+    def delete_azure_devops_credential():
+        return forward_to_sync_service("DELETE", "/api/settings/azure-devops")
+
 
     @app.route("/api/work-items", methods=["GET"])
     def list_work_items():

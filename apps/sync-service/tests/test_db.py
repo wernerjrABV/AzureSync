@@ -113,3 +113,22 @@ def test_init_schema_creates_capacity_interval_and_snapshot_tables(db_conn):
         "payload": "jsonb",
     }
     assert "idx_work_item_status_intervals_area_type_ended_at" in interval_indexes
+
+
+def test_init_schema_creates_app_settings_table(db_conn):
+    with db_conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT column_name, data_type
+            FROM information_schema.columns
+            WHERE table_name = 'app_settings'
+            ORDER BY column_name
+            """
+        )
+        columns = {row[0]: row[1] for row in cur.fetchall()}
+
+    assert columns == {
+        "encrypted_value": "text",
+        "key": "text",
+        "updated_at": "timestamp without time zone",
+    }

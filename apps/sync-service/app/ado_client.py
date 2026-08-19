@@ -1,13 +1,15 @@
 import datetime
 import json
 import time
+from collections.abc import Callable
 
 import requests
 
-from app.config import get_ado_api_key
+from app.credential_protection import CredentialProtectionError
 
 RETRY_DELAYS = [5, 15, 30]
 API_VERSION = "7.1"
+_UNRESOLVED = object()
 
 
 class AdoAuthError(Exception):
@@ -19,13 +21,30 @@ class AdoRetryExhaustedError(Exception):
 
 
 class AdoClient:
-    def __init__(self, organization: str, project: str, pat: str | None = None):
+    def __init__(
+        self,
+        organization: str,
+        project: str,
+        pat: str | None = None,
+        *,
+        pat_provider: Callable[[], str | None] | None = None,
+    ):
         self.organization = organization
         self.project = project
-        self.pat = pat or get_ado_api_key()
+        self._pat = pat if pat is not None else _UNRESOLVED
+        self._pat_provider = pat_provider
 
     def _auth(self):
-        return ("", self.pat)
+        if self._pat is _UNRESOLVED:
+            try:
+                self._pat = self._pat_provider() if self._pat_provider else None
+            except CredentialProtectionError as exc:
+                raise AdoAuthError(
+                    "Stored Azure DevOps credential cannot be decrypted"
+                ) from exc
+        if not self._pat:
+            raise AdoAuthError("Azure DevOps credential is not configured")
+        return ("", self._pat)
 
     def _request_with_retry(self, request_func, url: str, **kwargs) -> dict:
         last_status = None

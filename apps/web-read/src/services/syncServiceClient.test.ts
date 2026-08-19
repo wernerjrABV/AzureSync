@@ -2,8 +2,11 @@ import { afterEach, describe, expect, test, vi } from "vitest";
 
 import {
   createSyncAreaPath,
+  deleteAzureDevOpsCredential,
   deleteSyncAreaPath,
+  fetchAzureDevOpsCredentialStatus,
   fetchSyncAreaPaths,
+  saveAzureDevOpsCredential,
   startAreaPathSync,
   updateSyncAreaPath,
 } from "./syncServiceClient";
@@ -97,6 +100,54 @@ describe("syncServiceClient", () => {
     expect(fetchMock).toHaveBeenCalledWith("http://127.0.0.1:5001/api/area-paths/7/sync", {
       method: "POST",
     });
+  });
+
+  test("loads Azure DevOps credential status without a secret", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          configured: true,
+          updated_at: "2026-08-18T12:00:00",
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      )
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(fetchAzureDevOpsCredentialStatus()).resolves.toEqual({
+      configured: true,
+      updated_at: "2026-08-18T12:00:00",
+    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://127.0.0.1:5001/api/settings/azure-devops"
+    );
+  });
+
+  test("saves and deletes the Azure DevOps credential", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            configured: true,
+            updated_at: "2026-08-18T12:00:00",
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } }
+        )
+      )
+      .mockResolvedValueOnce(new Response(null, { status: 204 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(saveAzureDevOpsCredential("browser-secret")).resolves.toEqual({
+      configured: true,
+      updated_at: "2026-08-18T12:00:00",
+    });
+    await expect(deleteAzureDevOpsCredential()).resolves.toBeUndefined();
+
+    expect(fetchMock.mock.calls[0][1]).toMatchObject({
+      method: "PUT",
+      body: JSON.stringify({ api_key: "browser-secret" }),
+    });
+    expect(fetchMock.mock.calls[1][1]).toMatchObject({ method: "DELETE" });
   });
 
   test.each([
