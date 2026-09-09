@@ -27,6 +27,27 @@ function Invoke-Checked {
     if ($LASTEXITCODE -ne 0) { throw "$Message (exit code $LASTEXITCODE)." }
 }
 
+function Assert-RequiredRuntimes {
+    $pythonCommand = Get-Command python -ErrorAction SilentlyContinue
+    if ($null -eq $pythonCommand) {
+        throw 'Python 3.12+ não foi encontrado. Solicite Python 3.12 ou superior pelo portal de software da empresa e execute o instalador novamente.'
+    }
+    $pythonVersion = [version]((& python -c "import platform; print(platform.python_version())").Trim())
+    if ($pythonVersion -lt [version]'3.12') {
+        throw "Python $pythonVersion foi encontrado, mas o AzureSync requer Python 3.12+. Solicite a atualização pelo portal de software da empresa."
+    }
+
+    $nodeCommand = Get-Command node -ErrorAction SilentlyContinue
+    $npmCommand = Get-Command npm.cmd -ErrorAction SilentlyContinue
+    if ($null -eq $nodeCommand -or $null -eq $npmCommand) {
+        throw 'Node.js 22+ não foi encontrado. Solicite Node.js 22 ou superior pelo portal de software da empresa e execute o instalador novamente.'
+    }
+    $nodeVersion = [version]((& node -p "process.versions.node").Trim())
+    if ($nodeVersion -lt [version]'22.0') {
+        throw "Node.js $nodeVersion foi encontrado, mas o AzureSync requer Node.js 22+. Solicite a atualização pelo portal de software da empresa."
+    }
+}
+
 function New-EngineeringPortfolioIcon {
     param([string]$Root)
 
@@ -94,6 +115,8 @@ function New-DesktopShortcut {
 }
 
 try {
+    Assert-RequiredRuntimes
+
     if ($usingLocalSource -and (Test-Path -LiteralPath (Join-Path $scriptRoot '.git'))) {
         $sourceRoot = Get-Item -LiteralPath $scriptRoot
         Write-Host "Usando o clone local em $scriptRoot..."

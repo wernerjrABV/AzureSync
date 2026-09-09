@@ -7,6 +7,9 @@ Aplicação local para sincronizar work items do Azure DevOps. O
 ## Instalação no Windows
 
 Requisitos: Windows 10/11 x64, PowerShell 5.1+, Python 3.12+ e Node.js 22+.
+O instalador não instala runtimes nem altera o sistema: ele apenas usa as
+versões já disponíveis na máquina. Se Python ou Node.js estiver ausente ou
+desatualizado, solicite a instalação pelo portal de software da empresa.
 
 Instale diretamente do GitHub público com um único comando:
 
