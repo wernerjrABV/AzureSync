@@ -82,6 +82,25 @@ def release_lock(conn: psycopg.Connection, area_path_id: int) -> None:
         cur.execute("UPDATE area_paths SET is_running = FALSE WHERE id = %s", (area_path_id,))
 
 
+def update_sync_progress(
+    conn: psycopg.Connection,
+    area_path_id: int,
+    *,
+    phase: str,
+    current: int = 0,
+    total: int | None = None,
+) -> None:
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            UPDATE area_paths
+            SET sync_phase = %s, sync_progress_current = %s, sync_progress_total = %s
+            WHERE id = %s
+            """,
+            (phase, current, total, area_path_id),
+        )
+
+
 def update_sync_result(
     conn: psycopg.Connection,
     area_path_id: int,

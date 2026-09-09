@@ -25,12 +25,24 @@ def list_area_paths(conn: psycopg.Connection) -> list[dict]:
             """
             SELECT id, organization, project, area_path, incluir_subpaths, ativo,
                    intervalo_minutos, is_running, last_sync_at, last_sync_status,
-                   last_sync_count, last_error_msg, created_at, history_loaded_at
+                   last_sync_count, last_error_msg, sync_phase,
+                   sync_progress_current, sync_progress_total, created_at, history_loaded_at
             FROM area_paths
             ORDER BY id
             """
         )
-        return cur.fetchall()
+        rows = cur.fetchall()
+    for row in rows:
+        if row.get("sync_phase"):
+            row["sync_progress"] = {
+                "phase": row["sync_phase"],
+                "current": row.get("sync_progress_current") or 0,
+                "total": row.get("sync_progress_total"),
+            }
+        row.pop("sync_phase", None)
+        row.pop("sync_progress_current", None)
+        row.pop("sync_progress_total", None)
+    return rows
 
 
 def list_work_items(

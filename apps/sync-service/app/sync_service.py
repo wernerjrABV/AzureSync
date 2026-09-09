@@ -4,13 +4,6 @@ from app import repository as repo
 from app.ado_client import AdoAuthError, AdoClient, AdoRetryExhaustedError
 from app.capacity import StatusInterval, build_capacity_snapshot, build_status_intervals
 
-# Commit periodically during the per-item history backfill so a first-load sync over
-# thousands of work items doesn't hold one long-lived Postgres transaction open
-# (idle-in-transaction / lock retention risk). Value is arbitrary but small enough to
-# bound transaction length while still batching most commit overhead away.
-HISTORY_COMMIT_BATCH_SIZE = 50
-
-
 class SyncCancelled(Exception):
     """Raised when a user requests cancellation of an active synchronization."""
 
@@ -24,6 +17,8 @@ def run_sync(conn, area_path_row: dict, client: AdoClient, should_cancel=None) -
 
     started_at = datetime.datetime.now()
     log_id = repo.create_sync_log(conn, area_path_id, started_at)
+    conn.commit()
+    repo.update_sync_progress(conn, area_path_id, phase="Discovering work items")
     conn.commit()
 
     try:
@@ -65,6 +60,13 @@ def _do_sync(conn, area_path_row: dict, client: AdoClient, should_cancel=None) -
 
     _check_cancelled(should_cancel)
     current_ids = set(client.get_all_ids(area_path, incluir_subpaths))
+    repo.update_sync_progress(
+        conn,
+        area_path_id,
+        phase="Loading work item changes",
+        total=len(current_ids),
+    )
+    conn.commit()
 
     _check_cancelled(should_cancel)
     checkpoint = repo.get_checkpoint(conn, area_path_id)
@@ -85,6 +87,13 @@ def _do_sync(conn, area_path_row: dict, client: AdoClient, should_cancel=None) -
     is_first_history_load = repo.get_history_loaded_at(conn, area_path_id) is None
     history_target_ids = current_ids if is_first_history_load else set(changed_ids)
     any_history_failed = False
+    repo.update_sync_progress(
+        conn,
+        area_path_id,
+        phase="Synchronizing work item history",
+        total=len(history_target_ids),
+    )
+    conn.commit()
     for processed_count, work_item_id in enumerate(history_target_ids, start=1):
         _check_cancelled(should_cancel)
         try:
@@ -119,8 +128,15 @@ def _do_sync(conn, area_path_row: dict, client: AdoClient, should_cancel=None) -
             # checkpoint/upsert/delete work already completed above (Finding 1).
             any_history_failed = True
 
-        if processed_count % HISTORY_COMMIT_BATCH_SIZE == 0:
-            conn.commit()
+        repo.update_sync_progress(
+            conn,
+            area_path_id,
+            phase="Synchronizing work item history",
+            current=processed_count,
+            total=len(history_target_ids),
+        )
+        # Publish each item so the read-only API can show movement during long runs.
+        conn.commit()
 
         _check_cancelled(should_cancel)
 

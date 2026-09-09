@@ -78,6 +78,9 @@ def _run_manual_sync_worker(conn_factory, area_path_id: int, credential_protecto
     finally:
         with _MANUAL_SYNC_LOCK:
             _MANUAL_SYNC_IDS.discard(area_path_id)
+        if sync_control.take_deletion_request(area_path_id) and conn is not None:
+            repo.delete_area_path(conn, area_path_id)
+            conn.commit()
         sync_control.unregister(area_path_id)
         if conn is not None and getattr(conn, "is_sqlite", False):
             conn.close()
@@ -92,6 +95,12 @@ def _serialize_area_path(row: dict) -> dict:
         elif field in _BOOLEAN_RESPONSE_FIELDS and value is not None:
             value = bool(value)
         serialized[field] = value
+    if row.get("sync_phase"):
+        serialized["sync_progress"] = {
+            "phase": row["sync_phase"],
+            "current": row.get("sync_progress_current") or 0,
+            "total": row.get("sync_progress_total"),
+        }
     return serialized
 
 
@@ -181,8 +190,15 @@ def create_app(conn_factory=db.get_connection, credential_protector=None) -> Fla
     @app.route("/api/area-paths/<int:area_path_id>", methods=["DELETE"])
     def delete_area_path_api(area_path_id):
         conn = open_connection()
-        if repo.get_area_path(conn, area_path_id) is None:
+        row = repo.get_area_path(conn, area_path_id)
+        if row is None:
             return {"error": "area path not found"}, 404
+        with _MANUAL_SYNC_LOCK:
+            worker_active = area_path_id in _MANUAL_SYNC_IDS
+        if sync_control.get(area_path_id) is not None or worker_active:
+            sync_control.request_deletion(area_path_id)
+            sync_control.cancel(area_path_id)
+            return {"status": "deletion_requested"}, 202
         repo.delete_area_path(conn, area_path_id)
         conn.commit()
         return "", 204

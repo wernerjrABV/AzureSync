@@ -50,6 +50,10 @@ def test_full_load_upserts_all_items_and_sets_checkpoint(db_conn):
     assert repo.get_work_item_ids(db_conn, row["id"]) == {1, 2}
     assert repo.get_checkpoint(db_conn, row["id"]) == datetime.datetime(2026, 7, 2)
     assert repo.get_area_path(db_conn, row["id"])["is_running"] is False
+    progress = repo.get_area_path(db_conn, row["id"])
+    assert progress["sync_phase"] == "Synchronizing work item history"
+    assert progress["sync_progress_current"] == 2
+    assert progress["sync_progress_total"] == 2
 
 
 def test_delta_deletes_items_no_longer_in_scope(db_conn):

@@ -2,6 +2,7 @@ import threading
 
 
 _EVENTS: dict[int, threading.Event] = {}
+_PENDING_DELETIONS: set[int] = set()
 _LOCK = threading.Lock()
 
 
@@ -34,3 +35,16 @@ def cancel_all() -> int:
 def unregister(area_path_id: int) -> None:
     with _LOCK:
         _EVENTS.pop(area_path_id, None)
+
+
+def request_deletion(area_path_id: int) -> None:
+    with _LOCK:
+        _PENDING_DELETIONS.add(area_path_id)
+
+
+def take_deletion_request(area_path_id: int) -> bool:
+    with _LOCK:
+        if area_path_id not in _PENDING_DELETIONS:
+            return False
+        _PENDING_DELETIONS.remove(area_path_id)
+        return True

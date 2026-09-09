@@ -156,14 +156,14 @@ describe("SynchronizationPage", () => {
     expect(await screen.findByText("Intake\\Platform")).toBeInTheDocument();
   });
 
-  test("lists configured area paths and disables sync while one is already running", async () => {
+  test("shows force synchronization while one is already running", async () => {
     mockInitialLoad([{ ...areaPath, is_running: true, last_sync_status: null }]);
 
     renderPage();
 
     expect(await screen.findByText("Intake\\Platform")).toBeInTheDocument();
     expect(screen.getByText("Running")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Synchronize Intake\\Platform" })).toHaveAttribute("aria-disabled", "true");
+    expect(screen.getByRole("button", { name: "Force synchronization Intake\\Platform" })).toBeInTheDocument();
   });
 
   test("renders the Azure DevOps credential card above the synchronization cards", async () => {
@@ -281,6 +281,25 @@ describe("SynchronizationPage", () => {
     expect(screen.getAllByText("Running")).toHaveLength(2);
   });
 
+  test("shows live synchronization progress in the running card", async () => {
+    mockInitialLoad([{
+      ...areaPath,
+      is_running: true,
+      last_sync_status: null,
+      sync_progress: {
+        phase: "Synchronizing work item history",
+        current: 3,
+        total: 10,
+      },
+    }]);
+
+    renderPage();
+
+    expect(await screen.findByText("Synchronizing work item history")).toBeInTheDocument();
+    expect(screen.getByText("3 of 10 items processed")).toBeInTheDocument();
+    expect(screen.getByTestId("sync-progress-7")).toBeInTheDocument();
+  });
+
   test("cancels an individual synchronization after confirmation", async () => {
     vi.mocked(syncServiceClient.cancelAreaPathSync).mockResolvedValue(undefined);
     vi.mocked(syncServiceClient.fetchSyncAreaPaths)
@@ -333,7 +352,7 @@ describe("SynchronizationPage", () => {
 
     renderPage();
 
-    fireEvent.click(await screen.findByRole("button", { name: "Force synchronization" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Force synchronization Intake\\Platform" }));
     const dialog = screen.getByRole("alertdialog");
     expect(dialog).toHaveTextContent("Reset a stale synchronization lock");
     fireEvent.click(within(dialog).getByRole("button", { name: "Force synchronization" }));
@@ -418,7 +437,7 @@ describe("SynchronizationPage", () => {
     }
   });
 
-  test("optimistically marks the card as running and disables all actions until sync finishes", async () => {
+  test("optimistically marks the card as running and keeps recovery actions available", async () => {
     const startRequest = deferred<void>();
     vi.mocked(syncServiceClient.fetchSyncAreaPaths).mockResolvedValue([areaPath]);
     vi.mocked(syncServiceClient.startAreaPathSync).mockReturnValue(startRequest.promise);
@@ -429,9 +448,9 @@ describe("SynchronizationPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "Synchronize Intake\\Platform" }));
 
     expect(screen.getByText("Running")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Synchronize Intake\\Platform" })).toHaveAttribute("aria-disabled", "true");
+    expect(screen.getByRole("button", { name: "Force synchronization Intake\\Platform" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Edit Intake\\Platform" })).toHaveAttribute("aria-disabled", "true");
-    expect(screen.getByRole("button", { name: "Delete Intake\\Platform" })).toHaveAttribute("aria-disabled", "true");
+    expect(screen.getByRole("button", { name: "Delete Intake\\Platform" })).not.toHaveAttribute("aria-disabled", "true");
 
     startRequest.resolve();
     await act(async () => {});

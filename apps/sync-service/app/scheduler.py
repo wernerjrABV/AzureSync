@@ -29,6 +29,9 @@ def _sync_all_active(conn_factory, credential_protector) -> None:
             try:
                 sync_service.run_sync(conn, row, client, should_cancel=sync_event.is_set)
             finally:
+                if sync_control.take_deletion_request(row["id"]):
+                    repo.delete_area_path(conn, row["id"])
+                    conn.commit()
                 sync_control.unregister(row["id"])
     finally:
         if getattr(conn, "is_sqlite", False):

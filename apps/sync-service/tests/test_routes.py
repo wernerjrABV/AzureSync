@@ -242,6 +242,24 @@ def test_api_delete_area_path_returns_no_content(client, db_conn):
     assert repo.get_area_path(db_conn, area_path_id) is None
 
 
+def test_api_delete_area_path_requests_cancellation_before_deleting_active_sync(client, db_conn):
+    area_path_id = repo.create_area_path(db_conn, "org", "proj", "proj\\A")
+    repo.try_acquire_lock(db_conn, area_path_id)
+    db_conn.commit()
+    sync_event = routes.sync_control.register(area_path_id)
+
+    try:
+        response = client.delete(f"/api/area-paths/{area_path_id}")
+    finally:
+        routes.sync_control.take_deletion_request(area_path_id)
+        routes.sync_control.unregister(area_path_id)
+
+    assert response.status_code == 202
+    assert response.get_json() == {"status": "deletion_requested"}
+    assert sync_event.is_set()
+    assert repo.get_area_path(db_conn, area_path_id) is not None
+
+
 def test_api_credential_lifecycle_never_returns_secret(client):
     assert client.get("/api/settings/azure-devops").get_json() == {
         "configured": False,

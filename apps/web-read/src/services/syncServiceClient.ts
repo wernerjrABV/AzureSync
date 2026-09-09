@@ -13,6 +13,11 @@ export interface SyncAreaPath {
   last_error_msg: string | null;
   created_at: string;
   history_loaded_at: string | null;
+  sync_progress?: {
+    phase: string;
+    current: number;
+    total: number | null;
+  };
 }
 
 export interface AreaPathInput {
@@ -98,10 +103,14 @@ export async function updateSyncAreaPath(
   return response.data;
 }
 
-export async function deleteSyncAreaPath(id: number): Promise<void> {
-  await request<void>(`/api/area-paths/${encodeURIComponent(String(id))}`, {
+export async function deleteSyncAreaPath(id: number): Promise<"deletion_requested" | undefined> {
+  const response = await request<{ status: "deletion_requested" } | undefined>(
+    `/api/area-paths/${encodeURIComponent(String(id))}`,
+    {
     method: "DELETE",
-  });
+    },
+  );
+  return response?.status;
 }
 
 export async function startAreaPathSync(id: number): Promise<void> {

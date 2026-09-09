@@ -6,6 +6,7 @@ import {
   deleteSyncAreaPath,
   fetchAzureDevOpsCredentialStatus,
   fetchSyncAreaPaths,
+  forceAreaPathSync,
   saveAzureDevOpsCredential,
   startAreaPathSync,
   updateSyncAreaPath,
@@ -98,6 +99,18 @@ describe("syncServiceClient", () => {
 
     await expect(startAreaPathSync(7)).resolves.toBeUndefined();
     expect(fetchMock).toHaveBeenCalledWith("http://127.0.0.1:5001/api/area-paths/7/sync", {
+      method: "POST",
+    });
+  });
+
+  test("forces an area path sync without a request body", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ status: "started", stale_lock_released: true }), { status: 202 })
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(forceAreaPathSync(7)).resolves.toBeUndefined();
+    expect(fetchMock).toHaveBeenCalledWith("http://127.0.0.1:5001/api/area-paths/7/force-sync", {
       method: "POST",
     });
   });

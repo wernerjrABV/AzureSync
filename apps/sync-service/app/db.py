@@ -20,6 +20,9 @@ CREATE TABLE IF NOT EXISTS area_paths (
     last_sync_status TEXT,
     last_sync_count INTEGER,
     last_error_msg TEXT,
+    sync_phase TEXT,
+    sync_progress_current INTEGER,
+    sync_progress_total INTEGER,
     created_at TIMESTAMP NOT NULL DEFAULT now()
 );
 
@@ -87,6 +90,9 @@ CREATE TABLE IF NOT EXISTS app_settings (
 
 ALTER TABLE area_paths ADD COLUMN IF NOT EXISTS last_error_msg TEXT;
 ALTER TABLE area_paths ADD COLUMN IF NOT EXISTS history_loaded_at TIMESTAMP;
+ALTER TABLE area_paths ADD COLUMN IF NOT EXISTS sync_phase TEXT;
+ALTER TABLE area_paths ADD COLUMN IF NOT EXISTS sync_progress_current INTEGER;
+ALTER TABLE area_paths ADD COLUMN IF NOT EXISTS sync_progress_total INTEGER;
 ALTER TABLE work_items ADD COLUMN IF NOT EXISTS parent_id INTEGER;
 ALTER TABLE work_items ADD COLUMN IF NOT EXISTS start_date TIMESTAMP;
 ALTER TABLE work_items ADD COLUMN IF NOT EXISTS target_date TIMESTAMP;
@@ -168,13 +174,22 @@ def init_schema(conn: psycopg.Connection) -> None:
     if getattr(conn, "is_sqlite", False):
         with conn.cursor() as cur:
             cur.execute(SQLITE_SCHEMA_SQL)
+            for column, definition in (
+                ("sync_phase", "TEXT"),
+                ("sync_progress_current", "INTEGER"),
+                ("sync_progress_total", "INTEGER"),
+            ):
+                cur.execute(f"PRAGMA table_info(area_paths)")
+                existing_columns = {row[1] for row in cur.fetchall()}
+                if column not in existing_columns:
+                    cur.execute(f"ALTER TABLE area_paths ADD COLUMN {column} {definition}")
         return
     with conn.cursor() as cur:
         cur.execute(SCHEMA_SQL)
 
 
 SQLITE_SCHEMA_SQL = """
-CREATE TABLE IF NOT EXISTS area_paths (id INTEGER PRIMARY KEY AUTOINCREMENT, organization TEXT NOT NULL, project TEXT NOT NULL, area_path TEXT NOT NULL, incluir_subpaths INTEGER NOT NULL DEFAULT 1, ativo INTEGER NOT NULL DEFAULT 1, intervalo_minutos INTEGER NOT NULL DEFAULT 60, is_running INTEGER NOT NULL DEFAULT 0, last_sync_at TIMESTAMP, last_sync_status TEXT, last_sync_count INTEGER, last_error_msg TEXT, history_loaded_at TIMESTAMP, created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP);
+CREATE TABLE IF NOT EXISTS area_paths (id INTEGER PRIMARY KEY AUTOINCREMENT, organization TEXT NOT NULL, project TEXT NOT NULL, area_path TEXT NOT NULL, incluir_subpaths INTEGER NOT NULL DEFAULT 1, ativo INTEGER NOT NULL DEFAULT 1, intervalo_minutos INTEGER NOT NULL DEFAULT 60, is_running INTEGER NOT NULL DEFAULT 0, last_sync_at TIMESTAMP, last_sync_status TEXT, last_sync_count INTEGER, last_error_msg TEXT, sync_phase TEXT, sync_progress_current INTEGER, sync_progress_total INTEGER, history_loaded_at TIMESTAMP, created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP);
 CREATE TABLE IF NOT EXISTS work_items (id INTEGER PRIMARY KEY, area_path_id INTEGER NOT NULL, title TEXT, work_item_type TEXT, state TEXT, assigned_to TEXT, changed_date TIMESTAMP, parent_id INTEGER, raw_json TEXT, synced_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, start_date TIMESTAMP, target_date TIMESTAMP, created_date TIMESTAMP, activated_date TIMESTAMP, closed_date TIMESTAMP);
 CREATE TABLE IF NOT EXISTS sync_checkpoints (area_path_id INTEGER PRIMARY KEY, last_changed_date TIMESTAMP);
 CREATE TABLE IF NOT EXISTS sync_logs (id INTEGER PRIMARY KEY AUTOINCREMENT, area_path_id INTEGER NOT NULL, started_at TIMESTAMP NOT NULL, finished_at TIMESTAMP, status TEXT, items_processed INTEGER, error_msg TEXT);

@@ -10,6 +10,7 @@ import { EmptyState } from "@astryxdesign/core/EmptyState";
 import { Grid } from "@astryxdesign/core/Grid";
 import { Icon } from "@astryxdesign/core/Icon";
 import { IconButton } from "@astryxdesign/core/IconButton";
+import { ProgressBar } from "@astryxdesign/core/ProgressBar";
 import {
   Card,
   HStack,
@@ -310,10 +311,15 @@ export default function SynchronizationPage() {
     setIsDeleting(true);
     setError(null);
     try {
-      await deleteSyncAreaPath(deletingAreaPath.id);
-      stopPolling(deletingAreaPath.id);
+      const deletionStatus = await deleteSyncAreaPath(deletingAreaPath.id);
       setDeletingAreaPath(null);
-      await refresh();
+      if (deletionStatus === "deletion_requested") {
+        pollingIds.current.set(deletingAreaPath.id, true);
+        await poll();
+      } else {
+        stopPolling(deletingAreaPath.id);
+        await refresh();
+      }
     } catch (requestError) {
       setError(errorMessage(requestError));
     } finally {
@@ -502,18 +508,46 @@ export default function SynchronizationPage() {
                   <Text type="supporting">Last synchronized: {areaPath.last_sync_at ?? "Never"}</Text>
                   <Text type="supporting">Last sync count: {areaPath.last_sync_count ?? 0}</Text>
                   <StatusMessage areaPath={areaPath} />
+                  {(areaPath.is_running || startingIds.has(areaPath.id)) && areaPath.sync_progress && (
+                    <VStack gap={1}>
+                      <ProgressBar
+                        label={areaPath.sync_progress.phase}
+                        value={areaPath.sync_progress.current}
+                        max={areaPath.sync_progress.total ?? 0}
+                        isIndeterminate={areaPath.sync_progress.total === null}
+                        hasValueLabel={areaPath.sync_progress.total !== null}
+                        formatValueLabel={(current, total) => `${current} / ${total}`}
+                        data-testid={`sync-progress-${areaPath.id}`}
+                      />
+                      <Text type="supporting">
+                        {areaPath.sync_progress.total === null
+                          ? "Discovering items..."
+                          : `${areaPath.sync_progress.current} of ${areaPath.sync_progress.total} items processed`}
+                      </Text>
+                    </VStack>
+                  )}
                 </VStack>
                 <VStack gap={2}>
                   <Divider />
                   <HStack gap={2} justify="end" align="center">
-                      <IconButton
-                    label={`Synchronize ${areaPath.area_path}`}
-                    tooltip="Synchronize"
-                    icon={<Icon icon="arrowsUpDown" size="sm" />}
-                    variant="primary"
-                    isDisabled={areaPath.is_running || startingIds.has(areaPath.id)}
-                    onClick={() => void handleStartSync(areaPath.id)}
-                  />
+                      {(areaPath.is_running || startingIds.has(areaPath.id)) ? (
+                        <IconButton
+                          label={`Force synchronization ${areaPath.area_path}`}
+                          tooltip="Force synchronization"
+                          icon={<Icon icon="arrowsUpDown" size="sm" />}
+                          variant="secondary"
+                          isDisabled={isForcing}
+                          onClick={() => setForcingAreaPath(areaPath)}
+                        />
+                      ) : (
+                        <IconButton
+                          label={`Synchronize ${areaPath.area_path}`}
+                          tooltip="Synchronize"
+                          icon={<Icon icon="arrowsUpDown" size="sm" />}
+                          variant="primary"
+                          onClick={() => void handleStartSync(areaPath.id)}
+                        />
+                      )}
                   {(areaPath.is_running || startingIds.has(areaPath.id)) && (
                     <IconButton
                       label={`Cancel ${areaPath.area_path}`}
@@ -522,14 +556,6 @@ export default function SynchronizationPage() {
                       variant="destructive"
                       isDisabled={isCancelling}
                       onClick={() => setCancellingAreaPath(areaPath)}
-                    />
-                  )}
-                  {(areaPath.is_running || startingIds.has(areaPath.id)) && (
-                    <Button
-                      label="Force synchronization"
-                      variant="secondary"
-                      isDisabled={isForcing}
-                      onClick={() => setForcingAreaPath(areaPath)}
                     />
                   )}
                   <IconButton
@@ -544,7 +570,6 @@ export default function SynchronizationPage() {
                     tooltip="Delete"
                     icon={<Icon icon={Trash2} size="sm" />}
                     variant="destructive"
-                    isDisabled={areaPath.is_running || startingIds.has(areaPath.id)}
                     onClick={() => setDeletingAreaPath(areaPath)}
                   />
                   </HStack>
@@ -635,7 +660,7 @@ export default function SynchronizationPage() {
         isOpen={deletingAreaPath !== null}
         onOpenChange={(open) => !open && setDeletingAreaPath(null)}
         title="Delete area path?"
-        description={deletingAreaPath ? `Remove ${deletingAreaPath.area_path} and its synchronization configuration.` : ""}
+        description={deletingAreaPath ? `Remove ${deletingAreaPath.area_path} and its synchronization configuration. Any active synchronization will be cancelled first.` : ""}
         actionLabel="Delete"
         isActionLoading={isDeleting}
         onAction={() => void handleDelete()}
