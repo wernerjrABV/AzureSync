@@ -8,15 +8,15 @@ Aplicação local para sincronizar work items do Azure DevOps. O
 
 Requisitos: Windows 10/11 x64, PowerShell 5.1+, Python 3.12+ e Node.js 22+.
 
-Em um PowerShell, execute:
+Instale diretamente do GitHub público com um único comando:
 
 ```powershell
 irm https://raw.githubusercontent.com/wernerjrABV/AzureSync/main/scripts/install.ps1 | iex
 ```
 
-O instalador baixa o código do GitHub para `%LOCALAPPDATA%\AzureSync\app`,
-cria ambientes Python isolados, instala as dependências com `pip` e instala o
-frontend com `npm ci`. Nenhum executável compilado é baixado ou gerado.
+O instalador baixa o código para `%LOCALAPPDATA%\AzureSync\app`, cria ambientes
+Python isolados, instala as dependências com `pip` e instala o frontend com
+`npm ci`. Nenhum executável compilado é baixado ou gerado.
 
 Depois da instalação:
 
