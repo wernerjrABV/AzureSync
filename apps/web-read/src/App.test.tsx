@@ -5,6 +5,15 @@ import { render, screen } from "@testing-library/react";
 import { beforeAll, describe, expect, test, vi } from "vitest";
 import App from "./App";
 
+vi.mock("./services/syncServiceClient", () => ({
+  fetchUpdateStatus: vi.fn().mockResolvedValue({
+    update_available: false,
+    current_version: "0.1.0",
+    latest_version: "0.1.0",
+  }),
+  startUpdate: vi.fn(),
+}));
+
 vi.mock("./pages/WorkItemsListPage", () => ({
   default: () => <div>Work items page</div>,
 }));
