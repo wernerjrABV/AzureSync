@@ -1,69 +1,27 @@
 # sync-service
 
-Syncs Azure DevOps work items into PostgreSQL, scoped per area path.
+Sincroniza work items do Azure DevOps para PostgreSQL ou SQLite, por area
+path. Este é o único serviço autorizado a escrever no banco.
 
-## Ownership
+## Execução
 
-**This is the only service in the monorepo authorized to write to the
-database** (INSERT / UPDATE / DELETE / UPSERT / operational data
-migrations). See `docs/adr/0002-single-writer.md`.
+Na instalação padrão, use `scripts/run-all.ps1` na raiz instalada. Para
+executar isoladamente:
 
-Responsibilities:
-- Poll Azure DevOps (WIQL + work item batch REST calls) per area path.
-- Normalize and upsert work items, work item history, and checkpoints.
-- Own the Postgres schema (`app/db.py`).
-
-Consumers that need to read this data (future `api-read`, dashboards,
-reports) must go through a read-only service — never connect directly to
-this database from another app.
-
-## Setup
-
-1. Set Windows environment variables:
-   - Set `DATABASE_URL` in the Windows environment.
-   - `SQLITE_DATABASE_PATH` is optional and defaults to `apps/data/azure_sync.sqlite3`.
-   - If PostgreSQL is not configured or cannot be reached, the service uses SQLite.
-   - Azure DevOps credentials are configured after startup through the synchronization
-     settings flow (or the `/api/settings/azure-devops` API), not through an
-     environment variable.
-2. Install dependencies:
-   ```powershell
-   python -m pip install --user uv
-   uv venv
-   uv pip install --python .venv\Scripts\python.exe -r requirements.txt
-   ```
-3. Run:
-   ```
-   .\.venv\Scripts\Activate.ps1
-   python .\run.py
-   ```
-4. Open http://127.0.0.1:5000
-
-## Running tests
-
-Requires a local Postgres test database:
 ```powershell
-createdb azure_sync_test
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+.\.venv\Scripts\python.exe .\run.py
+```
+
+O token do Azure DevOps é configurado pela interface web e protegido para o
+usuário atual do Windows.
+
+## Testes
+
+```powershell
 $env:TEST_DATABASE_URL='postgresql://postgres:postgres@localhost:5432/azure_sync_test'
 pytest
 ```
 
-## Capacity snapshot publication
-
-Capacity and flow data is built from Azure DevOps revision history for each
-area path. The first complete history backfill must finish successfully before
-a capacity snapshot is published. Until then, the Capacity & Flow page has no
-forecast to show for that area path.
-
-A forecast is available only when at least three months contain completed
-eligible work. Canceled items are excluded. If an item is reopened, it counts
-only at its final completion.
-
-## Usage
-
-- Add an area path via the form on the home page (organization, project, area path, include sub-paths, active, interval in minutes).
-- First sync for a new area path is a full load; subsequent syncs are incremental and remove items no longer in scope.
-- Click "Sincronizar agora" to trigger a sync manually — disabled while a sync is already running for that area path.
-- A red banner appears at the top if any area path's last sync failed due to an
-  invalid/expired token — update the stored credential through the synchronization
-  settings flow (or the `/api/settings/azure-devops` API).
+Regras de escrita e transação estão documentadas em `docs/adr/0002-single-writer.md`.

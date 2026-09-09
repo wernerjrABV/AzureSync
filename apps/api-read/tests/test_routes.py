@@ -41,6 +41,31 @@ def test_health_omits_cors_header_for_disallowed_origin(client):
     assert "Access-Control-Allow-Origin" not in response.headers
 
 
+def test_serves_production_spa_and_preserves_api_routes(tmp_path):
+    web = tmp_path / "web"
+    (web / "assets").mkdir(parents=True)
+    (web / "index.html").write_text("<main>AzureSync portable</main>", encoding="utf-8")
+    (web / "assets" / "app.js").write_text("window.portable = true", encoding="utf-8")
+    app = create_app(conn_factory=lambda: None, web_dist_path=web)
+    app.config["TESTING"] = True
+
+    with app.test_client() as test_client:
+        assert b"AzureSync portable" in test_client.get("/").data
+        assert b"AzureSync portable" in test_client.get("/synchronization").data
+        assert b"window.portable" in test_client.get("/assets/app.js").data
+        assert test_client.get("/health").get_json() == {"status": "ok"}
+        assert test_client.get("/api/not-a-route").status_code == 404
+
+
+def test_create_app_rejects_missing_web_dist_directory(tmp_path):
+    missing_web = tmp_path / "missing-web"
+
+    with pytest.raises(ValueError) as excinfo:
+        create_app(conn_factory=lambda: None, web_dist_path=missing_web)
+
+    assert str(missing_web) in str(excinfo.value)
+
+
 def _seed_capacity_snapshot(conn, *, area_path_id, payload):
     with conn.cursor() as cur:
         cur.execute(

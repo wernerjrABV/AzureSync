@@ -1,85 +1,86 @@
 # Azure DevOps Sync Monorepo
 
-Enterprise monorepo for syncing Azure DevOps work items into PostgreSQL and
-(in future phases) exposing them for read-only consumption.
+Aplicação local para sincronizar work items do Azure DevOps. O
+`apps/sync-service` é o único app autorizado a escrever no banco; consulte
+`docs/architecture/monorepo-architecture.md` para a arquitetura completa.
+
+## Instalação no Windows
+
+Requisitos: Windows 10/11 x64, PowerShell 5.1+, Python 3.12+ e Node.js 22+.
+
+Em um PowerShell, execute:
+
+```powershell
+irm https://raw.githubusercontent.com/wernerjrABV/AzureSync/main/scripts/install.ps1 | iex
+```
+
+O instalador baixa o código do GitHub para `%LOCALAPPDATA%\AzureSync\app`,
+cria ambientes Python isolados, instala as dependências com `pip` e instala o
+frontend com `npm ci`. Nenhum executável compilado é baixado ou gerado.
+
+Depois da instalação:
+
+```powershell
+& "$env:LOCALAPPDATA\AzureSync\app\scripts\run-all.ps1"
+```
+
+Para parar os serviços:
+
+```powershell
+& "$env:LOCALAPPDATA\AzureSync\app\scripts\stop-all.ps1"
+```
+
+A interface abre em http://127.0.0.1:5173. Configure o token do Azure DevOps
+na tela Synchronization; ele é protegido para o usuário atual do Windows e
+não é salvo em `.env`. Logs ficam na pasta `logs` da instalação.
+
+Para instalar outra versão ou branch, execute o instalador novamente.
+
+## Execução a partir de um clone
+
+```powershell
+git clone https://github.com/wernerjrABV/AzureSync.git
+cd AzureSync
+& .\scripts\install.ps1 -InstallRoot (Join-Path $PWD 'local-install')
+& .\local-install\scripts\run-all.ps1
+```
+
+O instalador também pode ser apontado para uma branch específica com
+`-Branch nome-da-branch`.
+
+## Desenvolvimento
+
+O sync service usa `DATABASE_URL` quando configurado e SQLite como fallback
+local. Para instalar e executar apenas esse serviço:
+
+```powershell
+cd apps/sync-service
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+.\.venv\Scripts\python.exe .\run.py
+```
+
+Para testes que usam PostgreSQL:
+
+```powershell
+$env:TEST_DATABASE_URL='postgresql://postgres:postgres@localhost:5432/azure_sync_test'
+cd apps/sync-service
+pytest
+```
 
 ## Layout
 
-```
-apps/
-  sync-service/      Flask app — syncs Azure DevOps → PostgreSQL.
-                      The ONLY app in this repo authorized to write to
-                      the database. See apps/sync-service/README.md.
-packages/
-  shared-contracts/       (placeholder) DTOs/schemas shared across apps.
-  shared-config/          (placeholder) lint/formatter/convention templates.
-  shared-observability/   (placeholder) logging/tracing/metrics helpers.
-  shared-db-guidelines/   (placeholder) data-access documentation/utilities.
-docs/
-  architecture/       System-level architecture docs.
-  adr/                Architecture Decision Records.
-  standards/          Technology lifecycle / governance rules.
+```text
+apps/sync-service/  único escritor do banco e sincronizador ADO
+apps/api-read/      API somente leitura
+apps/web-read/      frontend React
+packages/           contratos e documentação compartilhados
+docs/               arquitetura, ADRs e planos
+scripts/            instalação e execução local no Windows
 ```
 
-## Running the sync service
+## Governança
 
-### Starting all apps on Windows
-
-To start the sync service, read API, and web frontend at once, double-click
-`scripts/run-all.cmd`. It runs the services without leaving a terminal window
-open and launches the web interface at http://127.0.0.1:5173.
-
-To stop the services later, run `scripts/stop-all.ps1` from PowerShell.
-Runtime logs are written to the local `logs/` directory.
-
-```bash
-python -m pip install --user uv
-cd apps/sync-service
-uv venv
-uv pip install --python .venv\Scripts\python.exe -r requirements.txt
-.\.venv\Scripts\Activate.ps1
-python .\run.py
-```
-
-Open http://127.0.0.1:5000. See `apps/sync-service/README.md` for env vars
-and test setup.
-
-## Running the read path
-
-The read path consists of two apps: `apps/api-read` (read-only backend) and
-`apps/web-read` (React frontend).
-
-**Via PowerShell (Windows):**
-
-```powershell
-# Terminal 1: Start the read API
-.\scripts\run-api-read.ps1
-
-# Terminal 2: Start the web frontend
-.\scripts\run-web-read.ps1
-```
-
-Open http://127.0.0.1:5173 (web-read default port). See `apps/api-read/README.md`
-and `apps/web-read/README.md` for env vars and configuration. Full architecture
-at `docs/architecture/read-path-architecture.md`.
-
-## Roadmap
-
-**Complete:**
-- `apps/sync-service` — the only database writer (syncs Azure DevOps to PostgreSQL).
-- `apps/api-read` — read-only backend querying the same database.
-- `apps/web-read` — frontend listing data via `apps/api-read`.
-- Database index review for the read-heavy access pattern.
-
-**Next:**
-
-Each phase lands as its own design spec + implementation plan
-(see `docs/superpowers/specs/` and `docs/superpowers/plans/`) — this repo is
-built incrementally, not as a big-bang rewrite.
-
-## Governance
-
-- Architecture decisions: `docs/adr/`
-- Technology lifecycle (semestral review, V-2 annual upgrade rule):
-  `docs/standards/technology-lifecycle.md`
-- Single-writer rule: `docs/adr/0002-single-writer.md`
+- Decisões de arquitetura: `docs/adr/`
+- Regra de único escritor: `docs/adr/0002-single-writer.md`
+- Planos e especificações: `docs/superpowers/`

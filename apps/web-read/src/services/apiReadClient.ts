@@ -6,8 +6,7 @@ import type {
 import type { AreaPath } from "../models/areaPath";
 import type { FeatureTreeItem } from "../models/feature";
 import type { CapacitySnapshot } from "../models/capacity";
-
-const BASE_URL = import.meta.env.VITE_API_READ_BASE_URL ?? "http://127.0.0.1:5001";
+import { API_BASE_URL } from "./apiBaseUrl";
 
 export interface WorkItemListParams {
   areaPathId?: number;
@@ -29,7 +28,7 @@ export async function fetchWorkItems(
   query.set("order_by", params.orderBy ?? "changed_date");
   query.set("order_dir", params.orderDir ?? "desc");
 
-  const response = await fetch(`${BASE_URL}/api/work-items?${query.toString()}`);
+  const response = await fetch(`${API_BASE_URL}/api/work-items?${query.toString()}`);
   if (!response.ok) {
     throw new Error(`Failed to fetch work items: ${response.status}`);
   }
@@ -37,7 +36,7 @@ export async function fetchWorkItems(
 }
 
 export async function fetchWorkItemDetails(id: number): Promise<WorkItemDetails> {
-  const response = await fetch(`${BASE_URL}/api/work-items/${encodeURIComponent(String(id))}`);
+  const response = await fetch(`${API_BASE_URL}/api/work-items/${encodeURIComponent(String(id))}`);
   if (!response.ok) {
     throw new Error(`Failed to fetch work item details: ${response.status}`);
   }
@@ -46,7 +45,7 @@ export async function fetchWorkItemDetails(id: number): Promise<WorkItemDetails>
 }
 
 export async function fetchAreaPaths(): Promise<AreaPath[]> {
-  const response = await fetch(`${BASE_URL}/api/area-paths`);
+  const response = await fetch(`${API_BASE_URL}/api/area-paths`);
   if (!response.ok) {
     throw new Error(`Failed to fetch area paths: ${response.status}`);
   }
@@ -55,7 +54,7 @@ export async function fetchAreaPaths(): Promise<AreaPath[]> {
 
 export async function fetchFeaturesTree(areaPathId: number): Promise<FeatureTreeItem[]> {
   const response = await fetch(
-    `${BASE_URL}/api/features-tree?area_path_id=${encodeURIComponent(String(areaPathId))}`
+    `${API_BASE_URL}/api/features-tree?area_path_id=${encodeURIComponent(String(areaPathId))}`
   );
   if (!response.ok) {
     throw new Error(`Failed to fetch features tree: ${response.status}`);
@@ -74,7 +73,7 @@ export async function fetchCapacity(
     year: String(year),
     quarter: String(quarter),
   });
-  const response = await fetch(`${BASE_URL}/api/capacity?${query.toString()}`);
+  const response = await fetch(`${API_BASE_URL}/api/capacity?${query.toString()}`);
   if (!response.ok) {
     throw new Error(`Failed to fetch capacity: ${response.status}`);
   }

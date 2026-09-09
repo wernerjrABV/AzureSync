@@ -1,72 +1,23 @@
 # api-read
 
-Read-only Flask API over the Postgres database populated by
-`apps/sync-service`. **This service must never write to the database.**
-`apps/sync-service` is the only writer (see
-`docs/adr/0002-single-writer.md` and `docs/adr/0003-read-only-api.md`).
+API Flask somente leitura sobre os dados populados pelo `sync-service`.
 
-## Architectural limits
+## Execução
 
-- No INSERT/UPDATE/DELETE/UPSERT SQL anywhere in `app/` — enforced by
-  `tests/test_readonly_guardrail.py`.
-- No schema/DDL statements — schema is owned entirely by
-  `apps/sync-service/app/db.py`.
-- Uses the same Windows `DATABASE_URL` environment variable as sync-service today; there is no dedicated
-  read-only DB role yet (tracked as a known gap in
-  `docs/adr/0003-read-only-api.md`).
-
-## Running
+Na instalação padrão, use `scripts/run-all.ps1` na raiz instalada. Para
+executar isoladamente:
 
 ```powershell
-python -m pip install --user uv
-cd apps/api-read
-uv venv
-uv pip install --python .venv\Scripts\python.exe -r requirements.txt
-.\.venv\Scripts\Activate.ps1
-$env:DATABASE_URL='postgresql://postgres:postgres@localhost:5432/azure_sync'
-python .\run.py
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+.\.venv\Scripts\python.exe .\run.py
 ```
 
-Server starts on `http://127.0.0.1:5001` by default (override with
-`API_READ_HOST` / `API_READ_PORT`).
+O serviço escuta em `http://127.0.0.1:5001` por padrão. A porta pode ser
+alterada com `API_READ_PORT`.
 
-## Environment variables
+## Limites arquiteturais
 
-| Variable | Required | Default | Purpose |
-|---|---|---|---|
-| `DATABASE_URL` | no | — | Postgres connection string; SQLite is used when missing or unavailable |
-| `SQLITE_DATABASE_PATH` | no | `apps/data/azure_sync.sqlite3` | Persistent SQLite fallback path |
-| `API_READ_HOST` | no | `127.0.0.1` | Bind host |
-| `API_READ_PORT` | no | `5001` | Bind port |
-| `API_READ_CORS_ORIGIN` | no | `http://127.0.0.1:5173,http://localhost:5173` | Comma-separated list of origins allowed via `Access-Control-Allow-Origin` (should include whatever origin `apps/web-read`'s dev server is actually opened from — `localhost` and `127.0.0.1` are treated as different origins by browsers) |
-| `TEST_DATABASE_URL` | no (tests only) | — | Separate Postgres DB for tests; tests are skipped if unset |
-
-## Endpoints
-
-- `GET /health` — liveness check.
-- `GET /api/area-paths` — list of area paths.
-- `GET /api/work-items?area_path_id=&work_item_type=&page=&page_size=&order_by=&order_dir=` —
-  paginated work item listing. See
-  `packages/shared-contracts/work-item-listing.md` for the full contract.
-
-- `GET /api/capacity?area_path_id=<id>&year=<yyyy>&quarter=<1..4>` returns the
-  published capacity and flow snapshot for an area path and selected quarter.
-  It returns no snapshot until sync-service has completed the area's first
-  history backfill. Forecasts require at least three months of completed
-  eligible work; Canceled items are excluded, and reopened items count at
-  their final completion.
-
-## Tests
-
-```powershell
-createdb azure_sync_test
-$env:TEST_DATABASE_URL='postgresql://postgres:postgres@localhost:5432/azure_sync_test'
-cd apps/sync-service && python -c "from app import db; c = db.get_connection(); db.init_schema(c); c.commit()"
-cd ../api-read
-.\.venv\Scripts\Activate.ps1
-pytest
-```
-
-Note: api-read's tests assume the schema already exists in
-`TEST_DATABASE_URL` — run sync-service's schema init once against that DB
-first (as shown above), since api-read itself never runs DDL.
+- Não contém SQL de escrita, DDL ou migrações.
+- Usa `DATABASE_URL` e o fallback SQLite configurado pelo serviço.
+- A regra de único escritor está em `docs/adr/0002-single-writer.md`.
