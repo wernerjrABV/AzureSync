@@ -53,6 +53,9 @@ pnpm-debug.log*
 /.superpowers/sdd/
 
 .worktrees/
+.build/
+build/
+dist/
 
 # dwyt start
 *mcp.json

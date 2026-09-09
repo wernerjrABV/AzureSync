@@ -1,7 +1,7 @@
 from pathlib import Path
 
 
-ROOT = Path(SPECPATH).parent
+ROOT = Path(SPECPATH).resolve().parent
 
 a = Analysis(
     [str(ROOT / "apps" / "launcher" / "entrypoint.py")],

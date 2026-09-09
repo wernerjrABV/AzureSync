@@ -31,6 +31,11 @@ _MANUAL_SYNC_IDS: set[int] = set()
 _MANUAL_SYNC_LOCK = threading.Lock()
 
 
+def shutdown_manual_syncs(wait: bool = True) -> None:
+    """Stop accepting queued manual syncs during portable shutdown."""
+    _MANUAL_SYNC_EXECUTOR.shutdown(wait=wait, cancel_futures=not wait)
+
+
 def start_manual_sync(conn_factory, area_path_id: int, credential_protector) -> bool:
     with _MANUAL_SYNC_LOCK:
         if area_path_id in _MANUAL_SYNC_IDS:

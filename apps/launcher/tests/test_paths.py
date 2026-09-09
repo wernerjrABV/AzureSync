@@ -28,6 +28,7 @@ def test_non_frozen_discovery_defaults_to_repository_install_root(monkeypatch, t
     paths = AppPaths.discover()
 
     assert paths.install_dir == Path(__file__).resolve().parents[3]
+    assert paths.install_dir.name == "AzureSync"
     assert paths.sync_executable == paths.install_dir / "_services" / "sync-service" / "sync-service.exe"
 
 
