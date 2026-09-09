@@ -456,24 +456,28 @@ export default function SynchronizationPage() {
         <VStack gap={3}>
           <TextInput
             label="Organization"
+            description="Found in the Azure DevOps URL: https://dev.azure.com/{organization}."
             value={form.organization}
             onChange={(organization) => setForm((current) => ({ ...current, organization }))}
             isRequired
           />
           <TextInput
             label="Project"
+            description="The project name from the Azure DevOps URL, or the project selector in the top navigation."
             value={form.project}
             onChange={(project) => setForm((current) => ({ ...current, project }))}
             isRequired
           />
           <TextInput
             label="Area path"
+            description="Copy the exact hierarchy from Project settings > Boards > Areas, for example Project\\Team."
             value={form.area_path}
             onChange={(area_path) => setForm((current) => ({ ...current, area_path }))}
             isRequired
           />
           <TextInput
             label="Interval (minutes)"
+            description="How often this area path is synchronized automatically."
             value={form.intervalo_minutos}
             onChange={(intervalo_minutos) => setForm((current) => ({ ...current, intervalo_minutos }))}
             isRequired
