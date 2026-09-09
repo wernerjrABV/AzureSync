@@ -281,7 +281,9 @@ describe("SynchronizationPage", () => {
 
   test("cancels an individual synchronization after confirmation", async () => {
     vi.mocked(syncServiceClient.cancelAreaPathSync).mockResolvedValue(undefined);
-    mockInitialLoad([{ ...areaPath, is_running: true, last_sync_status: null }]);
+    vi.mocked(syncServiceClient.fetchSyncAreaPaths)
+      .mockResolvedValueOnce([{ ...areaPath, is_running: true, last_sync_status: null }])
+      .mockResolvedValueOnce([{ ...areaPath, is_running: false, last_sync_status: "cancelled" }]);
 
     renderPage();
 
@@ -297,10 +299,19 @@ describe("SynchronizationPage", () => {
 
   test("cancels all running synchronizations after confirmation", async () => {
     vi.mocked(syncServiceClient.cancelAllSyncs).mockResolvedValue(undefined);
-    mockInitialLoad([
+    const runningAreaPaths = [
       { ...areaPath, is_running: true, last_sync_status: null },
       { ...areaPath, id: 8, area_path: "Intake\\Mobile", is_running: true, last_sync_status: null },
-    ]);
+    ];
+    vi.mocked(syncServiceClient.fetchSyncAreaPaths)
+      .mockResolvedValueOnce(runningAreaPaths)
+      .mockResolvedValueOnce(
+      runningAreaPaths.map((candidate) => ({ ...candidate, is_running: false, last_sync_status: "cancelled" })),
+      );
+    vi.mocked(syncServiceClient.fetchAzureDevOpsCredentialStatus).mockResolvedValue({
+      configured: false,
+      updated_at: null,
+    });
 
     renderPage();
 

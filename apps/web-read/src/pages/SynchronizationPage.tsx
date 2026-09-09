@@ -77,6 +77,9 @@ function statusVariant(status: string | null): "neutral" | "success" | "warning"
   if (status === "auth_error" || status === "error") {
     return "error";
   }
+  if (status === "cancelled") {
+    return "warning";
+  }
   return "neutral";
 }
 
@@ -123,6 +126,16 @@ function StatusMessage({ areaPath }: { areaPath: SyncAreaPath }) {
         status="error"
         title="Synchronization failed"
         description={areaPath.last_error_msg ?? "The synchronization service returned an error."}
+      />
+    );
+  }
+
+  if (areaPath.last_sync_status === "cancelled") {
+    return (
+      <Banner
+        status="warning"
+        title="Synchronization cancelled"
+        description="The synchronization was stopped before it completed."
       />
     );
   }
@@ -355,6 +368,8 @@ export default function SynchronizationPage() {
     setError(null);
     try {
       await cancelAreaPathSync(cancellingAreaPath.id);
+      pollingIds.current.set(cancellingAreaPath.id, true);
+      await poll();
       setCancellingAreaPath(null);
     } catch (requestError) {
       setError(errorMessage(requestError));
@@ -370,6 +385,12 @@ export default function SynchronizationPage() {
     setError(null);
     try {
       await cancelAllSyncs();
+      for (const areaPath of areaPaths) {
+        if (areaPath.is_running || startingIds.has(areaPath.id)) {
+          pollingIds.current.set(areaPath.id, true);
+        }
+      }
+      await poll();
       setIsCancelAllOpen(false);
     } catch (requestError) {
       setError(errorMessage(requestError));
