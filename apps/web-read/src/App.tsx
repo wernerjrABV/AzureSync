@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { AlertDialog } from "@astryxdesign/core/AlertDialog";
 import { Theme } from "@astryxdesign/core/theme";
 import { neutralTheme } from "@astryxdesign/theme-neutral";
 import { AppShell } from "@astryxdesign/core/AppShell";
@@ -16,7 +17,7 @@ import SynchronizationPage from "./pages/SynchronizationPage";
 import CapacityFlowPage from "./pages/CapacityFlowPage";
 
 const INFO_MESSAGE = "";
-const APP_VERSION = "0.2.0";
+const APP_VERSION = "0.2.1";
 
 type Page = "work-items" | "features-roadmap" | "synchronization" | "capacity-flow";
 
@@ -24,6 +25,7 @@ export default function App() {
   const [page, setPage] = useState<Page>("work-items");
   const [update, setUpdate] = useState<UpdateStatus | null>(null);
   const [isUpdating, setIsUpdating] = useState(false);
+  const [isUpdateConfirmationOpen, setIsUpdateConfirmationOpen] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -34,6 +36,7 @@ export default function App() {
   }, []);
 
   const handleUpdate = async () => {
+    setIsUpdateConfirmationOpen(false);
     setIsUpdating(true);
     try {
       await startUpdate();
@@ -87,7 +90,7 @@ export default function App() {
               status="info"
               title={`New version ${update.latest_version} is available`}
               description={`You are running ${update.current_version}.`}
-              endContent={<Button label="Update now" variant="primary" isLoading={isUpdating} onClick={() => void handleUpdate()} />}
+              endContent={<Button label="Update now" variant="primary" isLoading={isUpdating} onClick={() => setIsUpdateConfirmationOpen(true)} />}
             />
           ) : INFO_MESSAGE ? <Banner status="info" title={INFO_MESSAGE} /> : undefined
         }
@@ -102,6 +105,15 @@ export default function App() {
           <CapacityFlowPage />
         )}
       </AppShell>
+      <AlertDialog
+        isOpen={isUpdateConfirmationOpen}
+        onOpenChange={setIsUpdateConfirmationOpen}
+        title="Update application now?"
+        description="The application will be unavailable for a few moments while the update is downloaded and installed."
+        actionLabel="Update now"
+        isActionLoading={isUpdating}
+        onAction={() => void handleUpdate()}
+      />
     </Theme>
   );
 }
