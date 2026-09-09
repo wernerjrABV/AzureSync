@@ -8,6 +8,10 @@ $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
 $repo = 'wernerjrABV/AzureSync'
+$scriptRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
+$installRootResolved = [IO.Path]::GetFullPath($InstallRoot)
+$scriptRootResolved = [IO.Path]::GetFullPath($scriptRoot)
+$usingLocalSource = [string]::Equals($installRootResolved.TrimEnd('\'), $scriptRootResolved.TrimEnd('\'), [StringComparison]::OrdinalIgnoreCase)
 $archiveUrl = "https://github.com/$repo/archive/refs/heads/$Branch.zip"
 $tempRoot = Join-Path ([IO.Path]::GetTempPath()) ("azuresync-install-{0}" -f ([guid]::NewGuid()))
 $archivePath = Join-Path $tempRoot 'source.zip'
@@ -20,13 +24,29 @@ function Invoke-Checked {
 }
 
 try {
-    New-Item -ItemType Directory -Path $tempRoot, $extractRoot -Force | Out-Null
-    Write-Host "Baixando AzureSync ($Branch)..."
-    Invoke-WebRequest -Uri $archiveUrl -OutFile $archivePath -UseBasicParsing
-    Expand-Archive -LiteralPath $archivePath -DestinationPath $extractRoot -Force
+    if ($usingLocalSource -and (Test-Path -LiteralPath (Join-Path $scriptRoot '.git'))) {
+        $sourceRoot = Get-Item -LiteralPath $scriptRoot
+        Write-Host "Usando o clone local em $scriptRoot..."
+    }
+    else {
+        New-Item -ItemType Directory -Path $tempRoot, $extractRoot -Force | Out-Null
+        Write-Host "Baixando AzureSync ($Branch)..."
+        if (Get-Command gh -ErrorAction SilentlyContinue) {
+            Write-Host 'Usando GitHub CLI autenticado...'
+            Invoke-Checked { & gh api "repos/$repo/zipball/$Branch" --output $archivePath } 'Não foi possível baixar o repositório privado pelo GitHub CLI'
+        }
+        else {
+            Invoke-WebRequest -Uri $archiveUrl -OutFile $archivePath -UseBasicParsing
+        }
+        Expand-Archive -LiteralPath $archivePath -DestinationPath $extractRoot -Force
+        $sourceRoot = Get-ChildItem -LiteralPath $extractRoot -Directory | Select-Object -First 1
+        if ($null -eq $sourceRoot) { throw 'O arquivo do GitHub não contém uma pasta de projeto.' }
 
-    $sourceRoot = Get-ChildItem -LiteralPath $extractRoot -Directory | Select-Object -First 1
-    if ($null -eq $sourceRoot) { throw 'O arquivo do GitHub não contém uma pasta de projeto.' }
+        New-Item -ItemType Directory -Path (Split-Path -Parent $InstallRoot) -Force | Out-Null
+        if (Test-Path -LiteralPath $InstallRoot) { Remove-Item -LiteralPath $InstallRoot -Recurse -Force }
+        Move-Item -LiteralPath $sourceRoot.FullName -Destination $InstallRoot
+    }
+
     if (-not (Get-Command python -ErrorAction SilentlyContinue)) {
         throw 'Python 3.12+ não foi encontrado. Instale-o e execute novamente.'
     }
@@ -34,12 +54,8 @@ try {
         throw 'Node.js 22+ não foi encontrado. Instale-o e execute novamente.'
     }
 
-    New-Item -ItemType Directory -Path (Split-Path -Parent $InstallRoot) -Force | Out-Null
-    if (Test-Path -LiteralPath $InstallRoot) { Remove-Item -LiteralPath $InstallRoot -Recurse -Force }
-    Move-Item -LiteralPath $sourceRoot.FullName -Destination $InstallRoot
-
     foreach ($app in @('sync-service', 'api-read')) {
-        $appRoot = Join-Path $InstallRoot "apps\$app"
+        $appRoot = Join-Path $installRootResolved "apps\$app"
         $venv = Join-Path $appRoot '.venv'
         Write-Host "Configurando dependências Python de $app..."
         Invoke-Checked { & python -m venv $venv } "Não foi possível criar o ambiente Python de $app"
@@ -47,14 +63,14 @@ try {
     }
 
     Write-Host 'Instalando dependências do frontend...'
-    Push-Location (Join-Path $InstallRoot 'apps\web-read')
+    Push-Location (Join-Path $installRootResolved 'apps\web-read')
     try { Invoke-Checked { & npm.cmd ci --no-audit --no-fund } 'Não foi possível instalar as dependências do frontend' }
     finally { Pop-Location }
 
     Write-Host ''
     Write-Host 'AzureSync instalado com sucesso.' -ForegroundColor Green
-    Write-Host "Para iniciar: & '$InstallRoot\scripts\run-all.ps1'"
-    Write-Host "Para parar:   & '$InstallRoot\scripts\stop-all.ps1'"
+    Write-Host "Para iniciar: & '$installRootResolved\scripts\run-all.ps1'"
+    Write-Host "Para parar:   & '$installRootResolved\scripts\stop-all.ps1'"
     Write-Host 'A interface será aberta em http://127.0.0.1:5173.'
 }
 finally {
