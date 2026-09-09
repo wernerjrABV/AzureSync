@@ -1,9 +1,10 @@
 // @vitest-environment jsdom
 
 import "@testing-library/jest-dom/vitest";
-import { render, screen } from "@testing-library/react";
-import { beforeAll, describe, expect, test, vi } from "vitest";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { afterEach, beforeAll, describe, expect, test, vi } from "vitest";
 import App from "./App";
+import * as syncServiceClient from "./services/syncServiceClient";
 
 vi.mock("./services/syncServiceClient", () => ({
   fetchUpdateStatus: vi.fn().mockResolvedValue({
@@ -51,6 +52,16 @@ beforeAll(() => {
       dispatchEvent: vi.fn(),
     })),
   });
+  HTMLDialogElement.prototype.showModal = function showModal() {
+    this.setAttribute("open", "");
+  };
+  HTMLDialogElement.prototype.close = function close() {
+    this.removeAttribute("open");
+  };
+});
+
+afterEach(() => {
+  vi.clearAllMocks();
 });
 
 describe("App navigation", () => {
@@ -67,5 +78,26 @@ describe("App navigation", () => {
     render(<App />);
 
     expect(screen.queryByRole("button", { name: "Capacity & Flow" })).not.toBeInTheDocument();
+  });
+
+  test("asks for confirmation before starting an update", async () => {
+    vi.mocked(syncServiceClient.fetchUpdateStatus).mockResolvedValue({
+      update_available: true,
+      current_version: "0.1.0",
+      latest_version: "0.2.0",
+    });
+
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Update now" }));
+    const dialog = screen.getByRole("alertdialog");
+    expect(dialog).toHaveTextContent("unavailable for a few moments");
+    expect(syncServiceClient.startUpdate).not.toHaveBeenCalled();
+
+    fireEvent.click(within(dialog).getByRole("button", { name: "Update now" }));
+
+    await waitFor(() => {
+      expect(syncServiceClient.startUpdate).toHaveBeenCalledTimes(1);
+    });
   });
 });
