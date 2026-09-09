@@ -17,7 +17,7 @@ import SynchronizationPage from "./pages/SynchronizationPage";
 import CapacityFlowPage from "./pages/CapacityFlowPage";
 
 const INFO_MESSAGE = "";
-const APP_VERSION = "0.2.1";
+const APP_VERSION = __APP_VERSION__;
 
 type Page = "work-items" | "features-roadmap" | "synchronization" | "capacity-flow";
 
