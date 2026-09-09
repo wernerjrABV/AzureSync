@@ -7,11 +7,15 @@ param(
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
-$repo = 'wernerjrABV/AzureSync'
-$scriptRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $installRootResolved = [IO.Path]::GetFullPath($InstallRoot)
-$scriptRootResolved = [IO.Path]::GetFullPath($scriptRoot)
-$usingLocalSource = [string]::Equals($installRootResolved.TrimEnd('\'), $scriptRootResolved.TrimEnd('\'), [StringComparison]::OrdinalIgnoreCase)
+$repo = 'wernerjrABV/AzureSync'
+$scriptRoot = $null
+$usingLocalSource = $false
+if (-not [string]::IsNullOrWhiteSpace($PSScriptRoot)) {
+    $scriptRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
+    $scriptRootResolved = [IO.Path]::GetFullPath($scriptRoot)
+    $usingLocalSource = [string]::Equals($installRootResolved.TrimEnd('\'), $scriptRootResolved.TrimEnd('\'), [StringComparison]::OrdinalIgnoreCase)
+}
 $archiveUrl = "https://github.com/$repo/archive/refs/heads/$Branch.zip"
 $tempRoot = Join-Path ([IO.Path]::GetTempPath()) ("azuresync-install-{0}" -f ([guid]::NewGuid()))
 $archivePath = Join-Path $tempRoot 'source.zip'
@@ -31,12 +35,13 @@ try {
     else {
         New-Item -ItemType Directory -Path $tempRoot, $extractRoot -Force | Out-Null
         Write-Host "Baixando AzureSync ($Branch)..."
-        if (Get-Command gh -ErrorAction SilentlyContinue) {
-            Write-Host 'Usando GitHub CLI autenticado...'
-            Invoke-Checked { & gh api "repos/$repo/zipball/$Branch" --output $archivePath } 'Não foi possível baixar o repositório privado pelo GitHub CLI'
-        }
-        else {
+        try {
             Invoke-WebRequest -Uri $archiveUrl -OutFile $archivePath -UseBasicParsing
+        }
+        catch {
+            if (-not (Get-Command gh -ErrorAction SilentlyContinue)) { throw }
+            Write-Host 'Download público indisponível; usando GitHub CLI autenticado...'
+            Invoke-Checked { & gh api "repos/$repo/zipball/$Branch" --output $archivePath } 'Não foi possível baixar o repositório pelo GitHub CLI'
         }
         Expand-Archive -LiteralPath $archivePath -DestinationPath $extractRoot -Force
         $sourceRoot = Get-ChildItem -LiteralPath $extractRoot -Directory | Select-Object -First 1
