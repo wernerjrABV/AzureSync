@@ -48,6 +48,48 @@ function Assert-RequiredRuntimes {
     }
 }
 
+function Stop-InstalledProcesses {
+    param([string]$Root)
+
+    $stopScript = Join-Path $Root 'scripts\stop-all.ps1'
+    if (Test-Path -LiteralPath $stopScript) {
+        Write-Host 'Encerrando os serviços existentes...'
+        & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $stopScript
+    }
+
+    $rootMarker = $Root.TrimEnd('\').ToLowerInvariant()
+    try {
+        $processes = Get-CimInstance Win32_Process -ErrorAction Stop | Where-Object {
+            $_.ProcessId -ne $PID -and
+            $_.Name -in @('python.exe', 'node.exe', 'esbuild.exe') -and
+            (($null -ne $_.ExecutablePath -and $_.ExecutablePath.ToLowerInvariant().StartsWith($rootMarker)) -or
+             ($null -ne $_.CommandLine -and $_.CommandLine.ToLowerInvariant().Contains($rootMarker)))
+        }
+        foreach ($process in $processes) {
+            Stop-Process -Id $process.ProcessId -Force -ErrorAction SilentlyContinue
+        }
+    }
+    catch {
+        Write-Warning 'Não foi possível inspecionar todos os processos; continuando com a parada pelos arquivos de PID.'
+    }
+    Start-Sleep -Seconds 2
+}
+
+function Remove-InstallRoot {
+    param([string]$Root)
+
+    for ($attempt = 1; $attempt -le 5; $attempt++) {
+        try {
+            Remove-Item -LiteralPath $Root -Recurse -Force -ErrorAction Stop
+            return
+        }
+        catch {
+            if ($attempt -eq 5) { throw }
+            Start-Sleep -Seconds 2
+        }
+    }
+}
+
 function New-EngineeringPortfolioIcon {
     param([string]$Root)
 
@@ -140,7 +182,10 @@ try {
         if ($null -eq $sourceRoot) { throw 'O arquivo do GitHub não contém uma pasta de projeto.' }
 
         New-Item -ItemType Directory -Path (Split-Path -Parent $InstallRoot) -Force | Out-Null
-        if (Test-Path -LiteralPath $InstallRoot) { Remove-Item -LiteralPath $InstallRoot -Recurse -Force }
+        if (Test-Path -LiteralPath $InstallRoot) {
+            Stop-InstalledProcesses -Root $InstallRoot
+            Remove-InstallRoot -Root $InstallRoot
+        }
         Move-Item -LiteralPath $sourceRoot.FullName -Destination $InstallRoot
     }
 
