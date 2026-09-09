@@ -32,9 +32,20 @@ if (-not (Get-Command npm.cmd -ErrorAction SilentlyContinue)) {
     throw 'Node.js/npm não foi encontrado. Instale Node.js e tente novamente.'
 }
 
-Start-AppProcess 'sync-service' (Join-Path $root 'apps\sync-service') 'python' @('run.py')
-Start-AppProcess 'api-read' (Join-Path $root 'apps\api-read') 'python' @('run.py')
-Start-AppProcess 'web-read' (Join-Path $root 'apps\web-read') 'npm.cmd' @('run', 'dev', '--', '--host', '127.0.0.1')
+function Resolve-Python {
+    param([string]$AppDirectory)
+    $venvPython = Join-Path $AppDirectory '.venv\Scripts\python.exe'
+    if (Test-Path -LiteralPath $venvPython) { return $venvPython }
+    if (Get-Command python -ErrorAction SilentlyContinue) { return 'python' }
+    throw 'Python não foi encontrado. Execute scripts/install.ps1 ou instale Python 3.12+.'
+}
+
+$syncDirectory = Join-Path $root 'apps\sync-service'
+$apiDirectory = Join-Path $root 'apps\api-read'
+$webDirectory = Join-Path $root 'apps\web-read'
+Start-AppProcess 'sync-service' $syncDirectory (Resolve-Python $syncDirectory) @('run.py')
+Start-AppProcess 'api-read' $apiDirectory (Resolve-Python $apiDirectory) @('run.py')
+Start-AppProcess 'web-read' $webDirectory 'npm.cmd' @('run', 'dev', '--', '--host', '127.0.0.1')
 
 Start-Sleep -Seconds 3
 if ($Visible) {
