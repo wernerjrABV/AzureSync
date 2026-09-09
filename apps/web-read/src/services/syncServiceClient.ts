@@ -111,6 +111,13 @@ export async function startAreaPathSync(id: number): Promise<void> {
   );
 }
 
+export async function forceAreaPathSync(id: number): Promise<void> {
+  await request<{ status: "started"; stale_lock_released: boolean }>(
+    `/api/area-paths/${encodeURIComponent(String(id))}/force-sync`,
+    { method: "POST" }
+  );
+}
+
 export async function cancelAreaPathSync(id: number): Promise<void> {
   await request<{ status: "cancellation_requested" }>(
     `/api/area-paths/${encodeURIComponent(String(id))}/cancel`,

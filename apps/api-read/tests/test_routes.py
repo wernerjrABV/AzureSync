@@ -278,6 +278,13 @@ def test_create_area_path_forwards_json_to_sync_service():
         ),
         (
             "POST",
+            "/api/area-paths/7/force-sync",
+            None,
+            202,
+            {"status": "started", "stale_lock_released": True},
+        ),
+        (
+            "POST",
             "/api/area-paths/7/sync",
             None,
             409,

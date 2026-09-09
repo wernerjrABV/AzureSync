@@ -114,6 +114,12 @@ def create_app(
             "POST", f"/api/area-paths/{area_path_id}/sync"
         )
 
+    @app.route("/api/area-paths/<int:area_path_id>/force-sync", methods=["POST"])
+    def force_sync_area_path(area_path_id):
+        return forward_to_sync_service(
+            "POST", f"/api/area-paths/{area_path_id}/force-sync"
+        )
+
     @app.route("/api/area-paths/<int:area_path_id>/cancel", methods=["POST"])
     def cancel_area_path_sync(area_path_id):
         return forward_to_sync_service(

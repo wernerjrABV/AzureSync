@@ -19,6 +19,7 @@ vi.mock("../services/syncServiceClient", () => ({
   updateSyncAreaPath: vi.fn(),
   deleteSyncAreaPath: vi.fn(),
   startAreaPathSync: vi.fn(),
+  forceAreaPathSync: vi.fn(),
   cancelAreaPathSync: vi.fn(),
   cancelAllSyncs: vi.fn(),
 }));
@@ -121,6 +122,7 @@ afterEach(() => {
   vi.mocked(syncServiceClient.updateSyncAreaPath).mockReset();
   vi.mocked(syncServiceClient.deleteSyncAreaPath).mockReset();
   vi.mocked(syncServiceClient.startAreaPathSync).mockReset();
+  vi.mocked(syncServiceClient.forceAreaPathSync).mockReset();
   vi.mocked(syncServiceClient.cancelAreaPathSync).mockReset();
   vi.mocked(syncServiceClient.cancelAllSyncs).mockReset();
 });
@@ -322,6 +324,22 @@ describe("SynchronizationPage", () => {
 
     await waitFor(() => {
       expect(syncServiceClient.cancelAllSyncs).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  test("forces a stale synchronization after confirmation", async () => {
+    vi.mocked(syncServiceClient.forceAreaPathSync).mockResolvedValue(undefined);
+    mockInitialLoad([{ ...areaPath, is_running: true, last_sync_status: null }]);
+
+    renderPage();
+
+    fireEvent.click(await screen.findByRole("button", { name: "Force synchronization" }));
+    const dialog = screen.getByRole("alertdialog");
+    expect(dialog).toHaveTextContent("Reset a stale synchronization lock");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Force synchronization" }));
+
+    await waitFor(() => {
+      expect(syncServiceClient.forceAreaPathSync).toHaveBeenCalledWith(7);
     });
   });
 

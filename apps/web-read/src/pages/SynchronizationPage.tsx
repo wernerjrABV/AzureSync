@@ -26,6 +26,7 @@ import {
   cancelAreaPathSync,
   deleteSyncAreaPath,
   fetchSyncAreaPaths,
+  forceAreaPathSync,
   startAreaPathSync,
   updateSyncAreaPath,
 } from "../services/syncServiceClient";
@@ -155,6 +156,8 @@ export default function SynchronizationPage() {
   const [cancellingAreaPath, setCancellingAreaPath] = useState<SyncAreaPath | null>(null);
   const [isCancelling, setIsCancelling] = useState(false);
   const [isCancelAllOpen, setIsCancelAllOpen] = useState(false);
+  const [forcingAreaPath, setForcingAreaPath] = useState<SyncAreaPath | null>(null);
+  const [isForcing, setIsForcing] = useState(false);
   const [startingIds, setStartingIds] = useState<Set<number>>(new Set());
   const latestRequestId = useRef(0);
   const latestInitialLoadId = useRef(0);
@@ -401,6 +404,28 @@ export default function SynchronizationPage() {
     }
   };
 
+  const handleForceSync = async () => {
+    if (!forcingAreaPath) {
+      return;
+    }
+
+    setIsForcing(true);
+    setError(null);
+    try {
+      await forceAreaPathSync(forcingAreaPath.id);
+      setForcingAreaPath(null);
+      setStartingIds((current) => new Set(current).add(forcingAreaPath.id));
+      pollingIds.current.set(forcingAreaPath.id, false);
+      await poll();
+    } catch (requestError) {
+      setError(errorMessage(requestError));
+    } finally {
+      if (isMounted.current) {
+        setIsForcing(false);
+      }
+    }
+  };
+
   const hasAvailableAreaPaths = areaPaths.some(
     (areaPath) => !areaPath.is_running && !startingIds.has(areaPath.id),
   );
@@ -497,6 +522,14 @@ export default function SynchronizationPage() {
                       variant="destructive"
                       isDisabled={isCancelling}
                       onClick={() => setCancellingAreaPath(areaPath)}
+                    />
+                  )}
+                  {(areaPath.is_running || startingIds.has(areaPath.id)) && (
+                    <Button
+                      label="Force synchronization"
+                      variant="secondary"
+                      isDisabled={isForcing}
+                      onClick={() => setForcingAreaPath(areaPath)}
                     />
                   )}
                   <IconButton
@@ -626,6 +659,16 @@ export default function SynchronizationPage() {
         actionLabel="Cancel all"
         isActionLoading={isCancelling}
         onAction={() => void handleCancelAll()}
+      />
+
+      <AlertDialog
+        isOpen={forcingAreaPath !== null}
+        onOpenChange={(open) => !open && !isForcing && setForcingAreaPath(null)}
+        title="Force synchronization?"
+        description={forcingAreaPath ? `Reset a stale synchronization lock for ${forcingAreaPath.area_path} and start it again? Use this only when the synchronization is no longer running.` : ""}
+        actionLabel="Force synchronization"
+        isActionLoading={isForcing}
+        onAction={() => void handleForceSync()}
       />
     </VStack>
   );

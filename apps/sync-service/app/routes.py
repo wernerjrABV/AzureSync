@@ -203,6 +203,33 @@ def create_app(conn_factory=db.get_connection, credential_protector=None) -> Fla
             return {"error": "sync already running"}, 409
         return {"status": "started"}, 202
 
+    @app.route("/api/area-paths/<int:area_path_id>/force-sync", methods=["POST"])
+    def force_manual_sync_api(area_path_id):
+        conn = open_connection()
+        row = repo.get_area_path(conn, area_path_id)
+        if row is None:
+            return {"error": "area path not found"}, 404
+
+        with _MANUAL_SYNC_LOCK:
+            manual_worker_active = area_path_id in _MANUAL_SYNC_IDS
+        if sync_control.get(area_path_id) is not None or manual_worker_active:
+            sync_control.cancel(area_path_id)
+            return {
+                "error": "sync is actively running; cancellation requested"
+            }, 409
+
+        if row["is_running"]:
+            repo.release_lock(conn, area_path_id)
+            conn.commit()
+
+        try:
+            started = start_manual_sync(conn_factory, area_path_id, credential_protector)
+        except Exception:
+            return {"error": "sync could not be queued"}, 503
+        if not started:
+            return {"error": "sync already running"}, 409
+        return {"status": "started", "stale_lock_released": bool(row["is_running"])}, 202
+
     @app.route("/api/area-paths/<int:area_path_id>/cancel", methods=["POST"])
     def cancel_area_path_sync_api(area_path_id):
         conn = open_connection()

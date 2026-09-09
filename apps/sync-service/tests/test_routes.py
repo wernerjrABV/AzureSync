@@ -401,6 +401,39 @@ def test_api_sync_returns_json_409_when_already_running(client, db_conn):
     assert response.get_json() == {"error": "sync already running"}
 
 
+@patch("app.routes.start_manual_sync", return_value=True)
+def test_api_force_sync_releases_stale_lock_and_starts_worker(
+    mock_start_manual_sync, client, db_conn
+):
+    area_path_id = repo.create_area_path(db_conn, "org", "proj", "proj\\A")
+    repo.try_acquire_lock(db_conn, area_path_id)
+    db_conn.commit()
+
+    response = client.post(f"/api/area-paths/{area_path_id}/force-sync")
+
+    assert response.status_code == 202
+    assert response.get_json() == {"status": "started", "stale_lock_released": True}
+    assert not repo.get_area_path(db_conn, area_path_id)["is_running"]
+    mock_start_manual_sync.assert_called_once()
+
+
+def test_api_force_sync_requests_cancel_instead_of_overlapping_active_worker(client, db_conn):
+    area_path_id = repo.create_area_path(db_conn, "org", "proj", "proj\\A")
+    db_conn.commit()
+    sync_event = routes.sync_control.register(area_path_id)
+
+    try:
+        response = client.post(f"/api/area-paths/{area_path_id}/force-sync")
+    finally:
+        routes.sync_control.unregister(area_path_id)
+
+    assert response.status_code == 409
+    assert response.get_json() == {
+        "error": "sync is actively running; cancellation requested"
+    }
+    assert sync_event.is_set()
+
+
 @patch("app.routes.sync_service.run_sync")
 @patch("app.routes.start_manual_sync", return_value=True)
 def test_api_sync_starts_background_worker_without_running_sync_in_request(
