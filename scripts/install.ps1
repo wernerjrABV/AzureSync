@@ -53,6 +53,9 @@ function New-EngineeringPortfolioIcon {
 
     $iconDirectory = Join-Path $Root 'assets'
     $iconPath = Join-Path $iconDirectory 'engineering-portfolio.ico'
+    if (Test-Path -LiteralPath $iconPath) {
+        return $iconPath
+    }
     try {
         Add-Type -AssemblyName System.Drawing
         New-Item -ItemType Directory -Path $iconDirectory -Force | Out-Null

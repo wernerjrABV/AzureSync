@@ -7,6 +7,7 @@ from flask.json.provider import DefaultJSONProvider
 from app import db, repository as repo
 from app.config import get_cors_allowed_origins, get_web_dist_path
 from app.sync_service_client import SyncServiceClient, SyncServiceUnavailable
+from app import update
 
 
 class ISODateJSONProvider(DefaultJSONProvider):
@@ -70,6 +71,18 @@ def create_app(
     @app.route("/health", methods=["GET"])
     def health():
         return jsonify({"status": "ok"})
+
+    @app.route("/api/update", methods=["GET"])
+    def check_update():
+        return jsonify(update.check_for_update())
+
+    @app.route("/api/update", methods=["POST"])
+    def apply_update():
+        status = update.check_for_update()
+        if not status["update_available"]:
+            return jsonify(status), 409
+        update.start_update()
+        return jsonify({"status": "started", **status}), 202
 
     @app.route("/api/area-paths", methods=["GET"])
     def list_area_paths():

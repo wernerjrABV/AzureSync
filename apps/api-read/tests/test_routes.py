@@ -6,6 +6,7 @@ from urllib.error import HTTPError
 import pytest
 
 from app import repository as repo
+from app import update
 from app.routes import create_app
 from app.sync_service_client import (
     SyncServiceClient,
@@ -27,6 +28,49 @@ def test_health(client):
 
     assert response.status_code == 200
     assert response.get_json() == {"status": "ok"}
+
+
+def test_update_status_returns_remote_version(monkeypatch):
+    monkeypatch.setattr(
+        update,
+        "check_for_update",
+        lambda: {
+            "update_available": True,
+            "current_version": "0.1.0",
+            "latest_version": "0.2.0",
+        },
+    )
+    app = create_app(conn_factory=lambda: None)
+    app.config["TESTING"] = True
+
+    with app.test_client() as test_client:
+        response = test_client.get("/api/update")
+
+    assert response.status_code == 200
+    assert response.get_json()["update_available"] is True
+
+
+def test_update_starts_background_update(monkeypatch):
+    monkeypatch.setattr(
+        update,
+        "check_for_update",
+        lambda: {
+            "update_available": True,
+            "current_version": "0.1.0",
+            "latest_version": "0.2.0",
+        },
+    )
+    started = []
+    monkeypatch.setattr(update, "start_update", lambda: started.append(True))
+    app = create_app(conn_factory=lambda: None)
+    app.config["TESTING"] = True
+
+    with app.test_client() as test_client:
+        response = test_client.post("/api/update")
+
+    assert response.status_code == 202
+    assert response.get_json()["status"] == "started"
+    assert started == [True]
 
 
 def test_health_includes_cors_header_for_allowed_origin(client):

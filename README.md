@@ -39,6 +39,10 @@ não é salvo em `.env`. Logs ficam na pasta `logs` da instalação.
 
 Para instalar outra versão ou branch, execute o instalador novamente.
 
+Quando uma versão nova estiver publicada no GitHub, a interface exibirá um
+banner com o botão `Update now`. O update baixa a nova versão, reinstala as
+dependências da aplicação, preserva os dados locais e reinicia os serviços.
+
 ## Execução a partir de um clone
 
 ```powershell

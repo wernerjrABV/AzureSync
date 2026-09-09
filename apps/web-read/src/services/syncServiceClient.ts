@@ -29,6 +29,12 @@ export interface AzureDevOpsCredentialStatus {
   updated_at: string | null;
 }
 
+export interface UpdateStatus {
+  update_available: boolean;
+  current_version: string;
+  latest_version: string | null;
+}
+
 const BASE_URL =
   import.meta.env.VITE_API_READ_BASE_URL ?? "http://127.0.0.1:5001";
 
@@ -121,4 +127,12 @@ export function saveAzureDevOpsCredential(
 
 export async function deleteAzureDevOpsCredential(): Promise<void> {
   await request<void>("/api/settings/azure-devops", { method: "DELETE" });
+}
+
+export function fetchUpdateStatus(): Promise<UpdateStatus> {
+  return request<UpdateStatus>("/api/update");
+}
+
+export function startUpdate(): Promise<UpdateStatus & { status: "started" }> {
+  return request<UpdateStatus & { status: "started" }>("/api/update", { method: "POST" });
 }

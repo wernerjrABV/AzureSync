@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Theme } from "@astryxdesign/core/theme";
 import { neutralTheme } from "@astryxdesign/theme-neutral";
 import { AppShell } from "@astryxdesign/core/AppShell";
@@ -7,6 +7,9 @@ import { TopNavHeading } from "@astryxdesign/core/TopNav";
 import { SideNav } from "@astryxdesign/core/SideNav";
 import { SideNavItem } from "@astryxdesign/core/SideNav";
 import { Banner } from "@astryxdesign/core/Banner";
+import { Button } from "@astryxdesign/core/Button";
+import { fetchUpdateStatus, startUpdate } from "./services/syncServiceClient";
+import type { UpdateStatus } from "./services/syncServiceClient";
 import WorkItemsListPage from "./pages/WorkItemsListPage";
 import FeaturesRoadmapPage from "./pages/FeaturesRoadmapPage";
 import SynchronizationPage from "./pages/SynchronizationPage";
@@ -18,6 +21,26 @@ type Page = "work-items" | "features-roadmap" | "synchronization" | "capacity-fl
 
 export default function App() {
   const [page, setPage] = useState<Page>("work-items");
+  const [update, setUpdate] = useState<UpdateStatus | null>(null);
+  const [isUpdating, setIsUpdating] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    fetchUpdateStatus().then((status) => {
+      if (active && status.update_available) setUpdate(status);
+    }).catch(() => undefined);
+    return () => { active = false; };
+  }, []);
+
+  const handleUpdate = async () => {
+    setIsUpdating(true);
+    try {
+      await startUpdate();
+      setUpdate(null);
+    } finally {
+      setIsUpdating(false);
+    }
+  };
 
   return (
     <Theme theme={neutralTheme}>
@@ -53,7 +76,14 @@ export default function App() {
           </SideNav>
         }
         banner={
-          INFO_MESSAGE ? <Banner status="info" title={INFO_MESSAGE} /> : undefined
+          update ? (
+            <Banner
+              status="info"
+              title={`New version ${update.latest_version} is available`}
+              description={`You are running ${update.current_version}.`}
+              endContent={<Button label="Update now" variant="primary" isLoading={isUpdating} onClick={() => void handleUpdate()} />}
+            />
+          ) : INFO_MESSAGE ? <Banner status="info" title={INFO_MESSAGE} /> : undefined
         }
       >
         {page === "work-items" ? (
