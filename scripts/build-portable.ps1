@@ -173,6 +173,7 @@ $artifactRoot = Join-Path $root 'dist'
 $bundle = Join-Path $artifactRoot 'AzureSync-win-x64'
 $zipPath = Join-Path $artifactRoot 'AzureSync-win-x64.zip'
 $hashPath = Join-Path $artifactRoot 'AzureSync-win-x64.zip.sha256'
+$sha1Path = Join-Path $artifactRoot 'AzureSync-win-x64.zip.sha1'
 
 New-Item -ItemType Directory -Path $buildRoot -Force | Out-Null
 New-Item -ItemType Directory -Path $artifactRoot -Force | Out-Null
@@ -272,11 +273,17 @@ if (Test-Path -LiteralPath $zipPath) {
 if (Test-Path -LiteralPath $hashPath) {
     Remove-Item -LiteralPath $hashPath -Force
 }
+if (Test-Path -LiteralPath $sha1Path) {
+    Remove-Item -LiteralPath $sha1Path -Force
+}
 
 Compress-Archive -Path $bundle -DestinationPath $zipPath -Force
-$hash = (Get-FileHash -LiteralPath $zipPath -Algorithm SHA256).Hash.ToLowerInvariant()
-[IO.File]::WriteAllText($hashPath, "$hash  AzureSync-win-x64.zip`n")
+$sha256 = (Get-FileHash -LiteralPath $zipPath -Algorithm SHA256).Hash.ToLowerInvariant()
+$sha1 = (Get-FileHash -LiteralPath $zipPath -Algorithm SHA1).Hash.ToLowerInvariant()
+[IO.File]::WriteAllText($hashPath, "$sha256  AzureSync-win-x64.zip`n")
+[IO.File]::WriteAllText($sha1Path, "$sha1  AzureSync-win-x64.zip`n")
 
 Write-Host "Portable bundle created at $bundle"
 Write-Host "ZIP created at $zipPath"
 Write-Host "SHA256 written to $hashPath"
+Write-Host "SHA1 written to $sha1Path"

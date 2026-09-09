@@ -113,12 +113,15 @@ Outputs:
 - unpacked bundle: `dist\AzureSync-win-x64\`
 - ZIP artifact: `dist\AzureSync-win-x64.zip`
 - SHA-256 sidecar: `dist\AzureSync-win-x64.zip.sha256`
+- SHA-1 sidecar: `dist\AzureSync-win-x64.zip.sha1`
 
 Verify the published ZIP hash with:
 
 ```powershell
 Get-FileHash .\dist\AzureSync-win-x64.zip -Algorithm SHA256
 Get-Content .\dist\AzureSync-win-x64.zip.sha256
+Get-FileHash .\dist\AzureSync-win-x64.zip -Algorithm SHA1
+Get-Content .\dist\AzureSync-win-x64.zip.sha1
 ```
 
 Optional Authenticode signing is available during the same build:
