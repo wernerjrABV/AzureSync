@@ -16,6 +16,7 @@ import SynchronizationPage from "./pages/SynchronizationPage";
 import CapacityFlowPage from "./pages/CapacityFlowPage";
 
 const INFO_MESSAGE = "";
+const APP_VERSION = "0.2.0";
 
 type Page = "work-items" | "features-roadmap" | "synchronization" | "capacity-flow";
 
@@ -50,7 +51,12 @@ export default function App() {
         topNav={
           <TopNav
             label="Main navigation"
-            heading={<TopNavHeading heading="Engineering Portfolio" />}
+            heading={
+              <TopNavHeading
+                heading="Engineering Portfolio"
+                subheading={`Version ${APP_VERSION}`}
+              />
+            }
           />
         }
         sideNav={
