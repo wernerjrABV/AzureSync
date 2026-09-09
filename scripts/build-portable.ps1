@@ -149,6 +149,13 @@ function Invoke-OptionalSigning {
 $root = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 Set-Location $root
 
+# Build only from the primary checkout so Sentinel One sees one stable output
+# location. Linked worktrees have a .git file instead of the main .git folder.
+$gitMetadata = Join-Path $root '.git'
+if (-not (Test-Path -LiteralPath $gitMetadata -PathType Container)) {
+    throw "Run this script from the primary repository checkout. Build output is fixed to: $root\dist"
+}
+
 Assert-SigningParameters
 Assert-BuildPlatform
 Assert-Toolchain
@@ -159,15 +166,16 @@ if (-not [string]::IsNullOrWhiteSpace($SignToolPath)) {
     $resolvedSignToolPath = (Resolve-Path -LiteralPath $SignToolPath).Path
 }
 
-$portableVenv = Join-Path $root '.build\portable-venv'
 $buildRoot = Join-Path $root '.build'
+$portableVenv = Join-Path $buildRoot 'portable-venv'
 $pytestTempRoot = Join-Path $buildRoot 'pytest-temp'
-$bundle = Join-Path $root 'dist\AzureSync-win-x64'
-$zipPath = Join-Path $root 'dist\AzureSync-win-x64.zip'
-$hashPath = Join-Path $root 'dist\AzureSync-win-x64.zip.sha256'
+$artifactRoot = Join-Path $root 'dist'
+$bundle = Join-Path $artifactRoot 'AzureSync-win-x64'
+$zipPath = Join-Path $artifactRoot 'AzureSync-win-x64.zip'
+$hashPath = Join-Path $artifactRoot 'AzureSync-win-x64.zip.sha256'
 
 New-Item -ItemType Directory -Path $buildRoot -Force | Out-Null
-New-Item -ItemType Directory -Path (Join-Path $root 'dist') -Force | Out-Null
+New-Item -ItemType Directory -Path $artifactRoot -Force | Out-Null
 Reset-Directory -Path $pytestTempRoot
 
 if (Test-Path -LiteralPath $portableVenv) {
