@@ -11,7 +11,11 @@ from app.capacity import StatusInterval, build_capacity_snapshot, build_status_i
 HISTORY_COMMIT_BATCH_SIZE = 50
 
 
-def run_sync(conn, area_path_row: dict, client: AdoClient) -> dict:
+class SyncCancelled(Exception):
+    """Raised when a user requests cancellation of an active synchronization."""
+
+
+def run_sync(conn, area_path_row: dict, client: AdoClient, should_cancel=None) -> dict:
     area_path_id = area_path_row["id"]
 
     if not repo.try_acquire_lock(conn, area_path_id):
@@ -23,7 +27,7 @@ def run_sync(conn, area_path_row: dict, client: AdoClient) -> dict:
     conn.commit()
 
     try:
-        items_processed = _do_sync(conn, area_path_row, client)
+        items_processed = _do_sync(conn, area_path_row, client, should_cancel=should_cancel)
         finished_at = datetime.datetime.now()
         repo.finish_sync_log(conn, log_id, finished_at, status="ok", items_processed=items_processed)
         repo.update_sync_result(
@@ -38,6 +42,9 @@ def run_sync(conn, area_path_row: dict, client: AdoClient) -> dict:
     except AdoRetryExhaustedError as exc:
         return _fail(conn, area_path_id, log_id, "error", str(exc))
 
+    except SyncCancelled:
+        return _fail(conn, area_path_id, log_id, "cancelled", "Synchronization cancelled by user.")
+
     except Exception as exc:  # unexpected error: still release lock and record it
         return _fail(conn, area_path_id, log_id, "error", str(exc))
 
@@ -46,16 +53,24 @@ def run_sync(conn, area_path_row: dict, client: AdoClient) -> dict:
         conn.commit()
 
 
-def _do_sync(conn, area_path_row: dict, client: AdoClient) -> int:
+def _check_cancelled(should_cancel) -> None:
+    if should_cancel is not None and should_cancel():
+        raise SyncCancelled
+
+
+def _do_sync(conn, area_path_row: dict, client: AdoClient, should_cancel=None) -> int:
     area_path_id = area_path_row["id"]
     area_path = area_path_row["area_path"]
     incluir_subpaths = area_path_row["incluir_subpaths"]
 
+    _check_cancelled(should_cancel)
     current_ids = set(client.get_all_ids(area_path, incluir_subpaths))
 
+    _check_cancelled(should_cancel)
     checkpoint = repo.get_checkpoint(conn, area_path_id)
     changed_ids = client.get_changed_ids(area_path, incluir_subpaths, since=checkpoint)
 
+    _check_cancelled(should_cancel)
     items = client.get_work_items_batch(changed_ids)
     repo.upsert_work_items(conn, area_path_id, items)
 
@@ -71,6 +86,7 @@ def _do_sync(conn, area_path_row: dict, client: AdoClient) -> int:
     history_target_ids = current_ids if is_first_history_load else set(changed_ids)
     any_history_failed = False
     for processed_count, work_item_id in enumerate(history_target_ids, start=1):
+        _check_cancelled(should_cancel)
         try:
             updates = client.get_work_item_updates(work_item_id)
             repo.upsert_work_item_history(conn, area_path_id, work_item_id, updates)
@@ -106,10 +122,13 @@ def _do_sync(conn, area_path_row: dict, client: AdoClient) -> int:
         if processed_count % HISTORY_COMMIT_BATCH_SIZE == 0:
             conn.commit()
 
+        _check_cancelled(should_cancel)
+
     if is_first_history_load and not any_history_failed:
         repo.set_history_loaded(conn, area_path_id, datetime.datetime.now())
 
     if not any_history_failed:
+        _check_cancelled(should_cancel)
         generated_at = datetime.datetime.now()
         snapshot = build_capacity_snapshot(
             area_path_id=area_path_id,

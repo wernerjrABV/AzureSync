@@ -2,7 +2,7 @@ import datetime
 
 from apscheduler.schedulers.background import BackgroundScheduler
 
-from app import credentials, db, repository as repo, sync_service
+from app import credentials, db, repository as repo, sync_control, sync_service
 from app.ado_client import AdoClient
 from app.credential_protection import DpapiCredentialProtector
 
@@ -25,7 +25,11 @@ def _sync_all_active(conn_factory, credential_protector) -> None:
                 row["project"],
                 pat_provider=lambda: credentials.load_api_key(conn, credential_protector),
             )
-            sync_service.run_sync(conn, row, client)
+            sync_event = sync_control.register(row["id"])
+            try:
+                sync_service.run_sync(conn, row, client, should_cancel=sync_event.is_set)
+            finally:
+                sync_control.unregister(row["id"])
     finally:
         if getattr(conn, "is_sqlite", False):
             conn.close()

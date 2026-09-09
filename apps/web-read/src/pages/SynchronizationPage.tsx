@@ -22,6 +22,8 @@ import { TextInput } from "@astryxdesign/core/TextInput";
 import AzureDevOpsCredentialCard from "../components/AzureDevOpsCredentialCard";
 import {
   createSyncAreaPath,
+  cancelAllSyncs,
+  cancelAreaPathSync,
   deleteSyncAreaPath,
   fetchSyncAreaPaths,
   startAreaPathSync,
@@ -137,6 +139,9 @@ export default function SynchronizationPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [deletingAreaPath, setDeletingAreaPath] = useState<SyncAreaPath | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [cancellingAreaPath, setCancellingAreaPath] = useState<SyncAreaPath | null>(null);
+  const [isCancelling, setIsCancelling] = useState(false);
+  const [isCancelAllOpen, setIsCancelAllOpen] = useState(false);
   const [startingIds, setStartingIds] = useState<Set<number>>(new Set());
   const latestRequestId = useRef(0);
   const latestInitialLoadId = useRef(0);
@@ -341,8 +346,45 @@ export default function SynchronizationPage() {
     await Promise.all(availableAreaPathIds.map((areaPathId) => handleStartSync(areaPathId)));
   };
 
+  const handleCancel = async () => {
+    if (!cancellingAreaPath) {
+      return;
+    }
+
+    setIsCancelling(true);
+    setError(null);
+    try {
+      await cancelAreaPathSync(cancellingAreaPath.id);
+      setCancellingAreaPath(null);
+    } catch (requestError) {
+      setError(errorMessage(requestError));
+    } finally {
+      if (isMounted.current) {
+        setIsCancelling(false);
+      }
+    }
+  };
+
+  const handleCancelAll = async () => {
+    setIsCancelling(true);
+    setError(null);
+    try {
+      await cancelAllSyncs();
+      setIsCancelAllOpen(false);
+    } catch (requestError) {
+      setError(errorMessage(requestError));
+    } finally {
+      if (isMounted.current) {
+        setIsCancelling(false);
+      }
+    }
+  };
+
   const hasAvailableAreaPaths = areaPaths.some(
     (areaPath) => !areaPath.is_running && !startingIds.has(areaPath.id),
+  );
+  const hasRunningAreaPaths = areaPaths.some(
+    (areaPath) => areaPath.is_running || startingIds.has(areaPath.id),
   );
 
   const isFormOpen = editingAreaPath !== undefined;
@@ -358,6 +400,12 @@ export default function SynchronizationPage() {
             variant="primary"
             isDisabled={!hasAvailableAreaPaths}
             onClick={() => void handleStartAllSyncs()}
+          />
+          <Button
+            label="Cancel all"
+            variant="destructive"
+            isDisabled={!hasRunningAreaPaths || isCancelling}
+            onClick={() => setIsCancelAllOpen(true)}
           />
           <Button label="Add area path" variant="primary" onClick={openCreateDialog} />
         </HStack>
@@ -412,7 +460,7 @@ export default function SynchronizationPage() {
                 <VStack gap={2}>
                   <Divider />
                   <HStack gap={2} justify="end" align="center">
-                  <IconButton
+                      <IconButton
                     label={`Synchronize ${areaPath.area_path}`}
                     tooltip="Synchronize"
                     icon={<Icon icon="arrowsUpDown" size="sm" />}
@@ -420,6 +468,16 @@ export default function SynchronizationPage() {
                     isDisabled={areaPath.is_running || startingIds.has(areaPath.id)}
                     onClick={() => void handleStartSync(areaPath.id)}
                   />
+                  {(areaPath.is_running || startingIds.has(areaPath.id)) && (
+                    <IconButton
+                      label={`Cancel ${areaPath.area_path}`}
+                      tooltip="Cancel synchronization"
+                      icon={<Icon icon="stop" size="sm" />}
+                      variant="destructive"
+                      isDisabled={isCancelling}
+                      onClick={() => setCancellingAreaPath(areaPath)}
+                    />
+                  )}
                   <IconButton
                     label={`Edit ${areaPath.area_path}`}
                     tooltip="Edit"
@@ -527,6 +585,26 @@ export default function SynchronizationPage() {
         actionLabel="Delete"
         isActionLoading={isDeleting}
         onAction={() => void handleDelete()}
+      />
+
+      <AlertDialog
+        isOpen={cancellingAreaPath !== null}
+        onOpenChange={(open) => !open && !isCancelling && setCancellingAreaPath(null)}
+        title="Cancel synchronization?"
+        description={cancellingAreaPath ? `Stop synchronization for ${cancellingAreaPath.area_path}?` : ""}
+        actionLabel="Cancel synchronization"
+        isActionLoading={isCancelling}
+        onAction={() => void handleCancel()}
+      />
+
+      <AlertDialog
+        isOpen={isCancelAllOpen}
+        onOpenChange={(open) => !open && !isCancelling && setIsCancelAllOpen(false)}
+        title="Cancel all synchronizations?"
+        description="Stop every synchronization currently running or waiting to start."
+        actionLabel="Cancel all"
+        isActionLoading={isCancelling}
+        onAction={() => void handleCancelAll()}
       />
     </VStack>
   );

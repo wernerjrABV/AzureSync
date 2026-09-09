@@ -114,6 +114,16 @@ def create_app(
             "POST", f"/api/area-paths/{area_path_id}/sync"
         )
 
+    @app.route("/api/area-paths/<int:area_path_id>/cancel", methods=["POST"])
+    def cancel_area_path_sync(area_path_id):
+        return forward_to_sync_service(
+            "POST", f"/api/area-paths/{area_path_id}/cancel"
+        )
+
+    @app.route("/api/sync/cancel", methods=["POST"])
+    def cancel_all_syncs():
+        return forward_to_sync_service("POST", "/api/sync/cancel")
+
     @app.route("/api/settings/azure-devops", methods=["GET"])
     def get_azure_devops_credential():
         return forward_to_sync_service("GET", "/api/settings/azure-devops")

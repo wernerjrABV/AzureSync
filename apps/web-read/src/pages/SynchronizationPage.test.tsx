@@ -19,6 +19,8 @@ vi.mock("../services/syncServiceClient", () => ({
   updateSyncAreaPath: vi.fn(),
   deleteSyncAreaPath: vi.fn(),
   startAreaPathSync: vi.fn(),
+  cancelAreaPathSync: vi.fn(),
+  cancelAllSyncs: vi.fn(),
 }));
 
 const areaPath: SyncAreaPath = {
@@ -119,6 +121,8 @@ afterEach(() => {
   vi.mocked(syncServiceClient.updateSyncAreaPath).mockReset();
   vi.mocked(syncServiceClient.deleteSyncAreaPath).mockReset();
   vi.mocked(syncServiceClient.startAreaPathSync).mockReset();
+  vi.mocked(syncServiceClient.cancelAreaPathSync).mockReset();
+  vi.mocked(syncServiceClient.cancelAllSyncs).mockReset();
 });
 
 describe("SynchronizationPage", () => {
@@ -273,6 +277,41 @@ describe("SynchronizationPage", () => {
       expect(syncServiceClient.startAreaPathSync).toHaveBeenCalledWith(8);
     });
     expect(screen.getAllByText("Running")).toHaveLength(2);
+  });
+
+  test("cancels an individual synchronization after confirmation", async () => {
+    vi.mocked(syncServiceClient.cancelAreaPathSync).mockResolvedValue(undefined);
+    mockInitialLoad([{ ...areaPath, is_running: true, last_sync_status: null }]);
+
+    renderPage();
+
+    fireEvent.click(await screen.findByRole("button", { name: "Cancel Intake\\Platform" }));
+    const dialog = screen.getByRole("alertdialog");
+    expect(dialog).toHaveTextContent("Stop synchronization for Intake\\Platform?");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Cancel synchronization" }));
+
+    await waitFor(() => {
+      expect(syncServiceClient.cancelAreaPathSync).toHaveBeenCalledWith(7);
+    });
+  });
+
+  test("cancels all running synchronizations after confirmation", async () => {
+    vi.mocked(syncServiceClient.cancelAllSyncs).mockResolvedValue(undefined);
+    mockInitialLoad([
+      { ...areaPath, is_running: true, last_sync_status: null },
+      { ...areaPath, id: 8, area_path: "Intake\\Mobile", is_running: true, last_sync_status: null },
+    ]);
+
+    renderPage();
+
+    fireEvent.click(await screen.findByRole("button", { name: "Cancel all" }));
+    const dialog = screen.getByRole("alertdialog");
+    expect(dialog).toHaveTextContent("Stop every synchronization currently running");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Cancel all" }));
+
+    await waitFor(() => {
+      expect(syncServiceClient.cancelAllSyncs).toHaveBeenCalledTimes(1);
+    });
   });
 
   test("reuses the form dialog to edit an area path", async () => {

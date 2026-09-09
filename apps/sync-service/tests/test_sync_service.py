@@ -107,6 +107,20 @@ def test_skips_when_already_running(db_conn):
     client.get_all_ids.assert_not_called()
 
 
+def test_cancellation_stops_before_remote_work_and_releases_lock(db_conn):
+    row = _area_path_row(db_conn)
+    client = MagicMock()
+
+    result = sync_service.run_sync(db_conn, row, client, should_cancel=lambda: True)
+    db_conn.commit()
+
+    assert result["status"] == "cancelled"
+    client.get_all_ids.assert_not_called()
+    updated = repo.get_area_path(db_conn, row["id"])
+    assert updated["last_sync_status"] == "cancelled"
+    assert updated["is_running"] is False
+
+
 def test_auth_error_sets_status_and_releases_lock(db_conn):
     row = _area_path_row(db_conn)
     client = MagicMock()

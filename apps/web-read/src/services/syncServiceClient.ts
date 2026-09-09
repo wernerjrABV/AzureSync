@@ -111,6 +111,20 @@ export async function startAreaPathSync(id: number): Promise<void> {
   );
 }
 
+export async function cancelAreaPathSync(id: number): Promise<void> {
+  await request<{ status: "cancellation_requested" }>(
+    `/api/area-paths/${encodeURIComponent(String(id))}/cancel`,
+    { method: "POST" }
+  );
+}
+
+export async function cancelAllSyncs(): Promise<void> {
+  await request<{ status: "cancellation_requested"; count: number }>(
+    "/api/sync/cancel",
+    { method: "POST" }
+  );
+}
+
 export function fetchAzureDevOpsCredentialStatus(): Promise<AzureDevOpsCredentialStatus> {
   return request<AzureDevOpsCredentialStatus>("/api/settings/azure-devops");
 }

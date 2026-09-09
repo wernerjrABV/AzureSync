@@ -4,7 +4,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 from flask import Flask, g, redirect, render_template, request
 
-from app import credentials, db, repository as repo, sync_service
+from app import credentials, db, repository as repo, sync_control, sync_service
 from app.ado_client import AdoClient
 from app.credential_protection import CredentialProtectionError, DpapiCredentialProtector
 
@@ -41,6 +41,7 @@ def start_manual_sync(conn_factory, area_path_id: int, credential_protector) -> 
         if area_path_id in _MANUAL_SYNC_IDS:
             return False
         _MANUAL_SYNC_IDS.add(area_path_id)
+        sync_control.register(area_path_id)
         try:
             _MANUAL_SYNC_EXECUTOR.submit(
                 _run_manual_sync_worker,
@@ -50,6 +51,7 @@ def start_manual_sync(conn_factory, area_path_id: int, credential_protector) -> 
             )
         except Exception:
             _MANUAL_SYNC_IDS.discard(area_path_id)
+            sync_control.unregister(area_path_id)
             raise
     return True
 
@@ -66,10 +68,17 @@ def _run_manual_sync_worker(conn_factory, area_path_id: int, credential_protecto
             row["project"],
             pat_provider=lambda: credentials.load_api_key(conn, credential_protector),
         )
-        sync_service.run_sync(conn, row, client)
+        with _MANUAL_SYNC_LOCK:
+            has_manual_reservation = area_path_id in _MANUAL_SYNC_IDS
+        sync_event = sync_control.get(area_path_id) if has_manual_reservation else None
+        if sync_event is None:
+            sync_service.run_sync(conn, row, client)
+        else:
+            sync_service.run_sync(conn, row, client, should_cancel=sync_event.is_set)
     finally:
         with _MANUAL_SYNC_LOCK:
             _MANUAL_SYNC_IDS.discard(area_path_id)
+        sync_control.unregister(area_path_id)
         if conn is not None and getattr(conn, "is_sqlite", False):
             conn.close()
 
@@ -193,6 +202,21 @@ def create_app(conn_factory=db.get_connection, credential_protector=None) -> Fla
         if not started:
             return {"error": "sync already running"}, 409
         return {"status": "started"}, 202
+
+    @app.route("/api/area-paths/<int:area_path_id>/cancel", methods=["POST"])
+    def cancel_area_path_sync_api(area_path_id):
+        conn = open_connection()
+        row = repo.get_area_path(conn, area_path_id)
+        if row is None:
+            return {"error": "area path not found"}, 404
+        if not row["is_running"] and not sync_control.cancel(area_path_id):
+            return {"error": "sync is not running"}, 409
+        sync_control.cancel(area_path_id)
+        return {"status": "cancellation_requested"}, 202
+
+    @app.route("/api/sync/cancel", methods=["POST"])
+    def cancel_all_syncs_api():
+        return {"status": "cancellation_requested", "count": sync_control.cancel_all()}, 202
 
     @app.route("/api/settings/azure-devops", methods=["GET"])
     def get_azure_devops_credential_api():
