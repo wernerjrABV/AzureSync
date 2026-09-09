@@ -3,6 +3,7 @@ import { AlertDialog } from "@astryxdesign/core/AlertDialog";
 import { Badge } from "@astryxdesign/core/Badge";
 import { Banner } from "@astryxdesign/core/Banner";
 import { Button } from "@astryxdesign/core/Button";
+import { Link } from "@astryxdesign/core/Link";
 import { Card, HStack, VStack } from "@astryxdesign/core/Layout";
 import { Spinner } from "@astryxdesign/core/Spinner";
 import { Text } from "@astryxdesign/core/Text";
@@ -122,6 +123,31 @@ export default function AzureDevOpsCredentialCard() {
         {status?.updated_at && (
           <Text type="supporting">Updated at {status.updated_at}</Text>
         )}
+
+        <VStack gap={1}>
+          <Text>
+            To create a PAT, open{' '}
+            <Link
+              href="https://app.vssps.visualstudio.com/app/register"
+              isExternalLink
+            >
+              Azure DevOps Personal access tokens
+            </Link>
+            , select <strong>+ New Token</strong>, choose the organization where the
+            project lives, set an expiration date, and select <strong>Work Items (Read)</strong>.
+          </Text>
+          <Text type="supporting">
+            This permission lets AzureSync read work items, area paths, and revision history.
+            Copy the token when it is created; Azure DevOps shows it only once.{' '}
+            <Link
+              href="https://learn.microsoft.com/en-us/azure/devops/organizations/accounts/use-personal-access-tokens-to-authenticate"
+              isExternalLink
+            >
+              See Microsoft&apos;s PAT guide
+            </Link>
+            .
+          </Text>
+        </VStack>
 
         {error && (
           <Banner

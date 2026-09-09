@@ -104,32 +104,36 @@ function New-EngineeringPortfolioIcon {
         $bitmap = New-Object System.Drawing.Bitmap(256, 256)
         $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
         $graphics.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
-        $graphics.Clear([System.Drawing.Color]::FromArgb(24, 48, 88))
+        $graphics.Clear([System.Drawing.Color]::FromArgb(15, 23, 42))
 
-        $gridPen = New-Object System.Drawing.Pen([System.Drawing.Color]::FromArgb(70, 125, 190), 2)
-        for ($coordinate = 24; $coordinate -lt 256; $coordinate += 32) {
-            $graphics.DrawLine($gridPen, $coordinate, 0, $coordinate, 256)
-            $graphics.DrawLine($gridPen, 0, $coordinate, 256, $coordinate)
-        }
+        $syncPen = New-Object System.Drawing.Pen([System.Drawing.Color]::FromArgb(56, 189, 248), 18)
+        $syncPen.StartCap = [System.Drawing.Drawing2D.LineCap]::Round
+        $syncPen.EndCap = [System.Drawing.Drawing2D.LineCap]::Round
+        $syncBounds = New-Object System.Drawing.Rectangle(48, 48, 160, 160)
+        $graphics.DrawArc($syncPen, $syncBounds, 205, 220)
+        $graphics.DrawArc($syncPen, $syncBounds, 25, 220)
 
-        $roadmapPen = New-Object System.Drawing.Pen([System.Drawing.Color]::White, 12)
-        $roadmapPen.EndCap = [System.Drawing.Drawing2D.LineCap]::Round
-        $roadmapPen.StartCap = [System.Drawing.Drawing2D.LineCap]::Round
-        $points = @(
-            (New-Object System.Drawing.Point(42, 188)),
-            (New-Object System.Drawing.Point(92, 132)),
-            (New-Object System.Drawing.Point(146, 160)),
-            (New-Object System.Drawing.Point(214, 70))
+        $arrowBrush = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(125, 211, 252))
+        $forwardArrow = @(
+            (New-Object System.Drawing.Point(192, 51)),
+            (New-Object System.Drawing.Point(215, 53)),
+            (New-Object System.Drawing.Point(205, 75))
         )
-        $graphics.DrawLines($roadmapPen, $points)
+        $backArrow = @(
+            (New-Object System.Drawing.Point(64, 205)),
+            (New-Object System.Drawing.Point(41, 203)),
+            (New-Object System.Drawing.Point(51, 181))
+        )
+        $graphics.FillPolygon($arrowBrush, $forwardArrow)
+        $graphics.FillPolygon($arrowBrush, $backArrow)
 
-        $nodeBrush = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(245, 183, 57))
-        $graphics.FillEllipse($nodeBrush, 198, 54, 32, 32)
+        $centerBrush = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::White)
+        $graphics.FillEllipse($centerBrush, 105, 105, 46, 46)
+
+        $centerBrush.Dispose()
+        $arrowBrush.Dispose()
+        $syncPen.Dispose()
         $bitmap.Save($iconPath, [System.Drawing.Imaging.ImageFormat]::Icon)
-
-        $nodeBrush.Dispose()
-        $roadmapPen.Dispose()
-        $gridPen.Dispose()
         $graphics.Dispose()
         $bitmap.Dispose()
         return $iconPath
